@@ -3287,13 +3287,13 @@ int work_queue_task_specify_url(struct work_queue_task *t, const char *file_url,
 	return 1;
 }
 
-int work_queue_task_specify_s3(struct work_queue_task *t, const char *bucket_name, const char *file_name, const char *remote_name, int type, int flags)
+int work_queue_task_specify_s3(struct work_queue_task *t, const char *file_name, const char *remote_name, int type, int flags)
 {
 	struct list *files;
 	struct work_queue_file *tf;
 
-	if(!t || !bucket_name || !file_name || !remote_name) {
-		fprintf(stderr, "Error: Null arguments for task, bucket name, file name, and remote name not allowed in specify_s3.\n");
+	if(!t || !file_name || !remote_name) {
+		fprintf(stderr, "Error: Null arguments for task, file name, and remote name not allowed in specify_s3.\n");
 		return 0;
 	}
 	if(remote_name[0] == '/') {
@@ -3342,7 +3342,7 @@ int work_queue_task_specify_s3(struct work_queue_task *t, const char *bucket_nam
 		}
 	}
 
-	tf = work_queue_file_create(remote_name, WORK_QUEUE_URL, flags);
+	tf = work_queue_file_create(remote_name, WORK_QUEUE_S3, flags);
 	if(!tf) return 0;
 
 	tf->length = strlen(file_name);
