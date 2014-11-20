@@ -918,6 +918,9 @@ char * make_cached_name( struct work_queue_task *t, struct work_queue_file *f )
 		case WORK_QUEUE_URL:
 			return string_format("url-%s",md5_string(digest));
 			break;
+		case WORK_QUEUE_S3:
+			return string_format("s3-%s",md5_string(digest));
+			break;
 		case WORK_QUEUE_BUFFER:
 		default:
 			return string_format("buffer-%s",md5_string(digest));
@@ -2136,11 +2139,17 @@ static int send_input_file(struct work_queue *q, struct work_queue_worker *w, st
 	case WORK_QUEUE_REMOTECMD:
 		debug(D_WQ, "%s (%s) needs %s from remote filesystem using %s", w->hostname, w->addrport, f->remote_name, f->payload);
 		send_worker_msg(q,w, "thirdget %d %s %s\n",WORK_QUEUE_FS_CMD, cached_name, f->payload);
-		break;
-
+	
 	case WORK_QUEUE_URL:
 		debug(D_WQ, "%s (%s) needs %s from the url, %s %d", w->hostname, w->addrport, cached_name, f->payload, f->length);
 		send_worker_msg(q,w, "url %s %d 0%o %d\n",cached_name, f->length, 0777, f->flags);
+		link_putlstring(w->link, f->payload, f->length, time(0) + q->short_timeout);
+		break;
+	break;
+
+	case WORK_QUEUE_S3:
+		debug(D_WQ, "%s (%s) needs %s from the s3, %s %d", w->hostname, w->addrport, cached_name, f->payload, f->length);
+		send_worker_msg(q,w, "s3 %s %d 0%o %d\n",cached_name, f->length, 0777, f->flags);
 		link_putlstring(w->link, f->payload, f->length, time(0) + q->short_timeout);
 		break;
 
@@ -3272,6 +3281,72 @@ int work_queue_task_specify_url(struct work_queue_task *t, const char *file_url,
 
 	tf->length = strlen(file_url);
 	tf->payload = xxstrdup(file_url);
+
+	list_push_tail(files, tf);
+
+	return 1;
+}
+
+int work_queue_task_specify_s3(struct work_queue_task *t, const char *bucket_name, const char *file_name, const char *remote_name, int type, int flags)
+{
+	struct list *files;
+	struct work_queue_file *tf;
+
+	if(!t || !bucket_name || !file_name || !remote_name) {
+		fprintf(stderr, "Error: Null arguments for task, bucket name, file name, and remote name not allowed in specify_s3.\n");
+		return 0;
+	}
+	if(remote_name[0] == '/') {
+		fprintf(stderr, "Error: Remote name %s contains absolute path.\n", remote_name);
+		return 0;
+	}
+
+	if(type == WORK_QUEUE_INPUT) {
+		files = t->input_files;
+
+		//check if two different s3 names map to the same remote name for inputs.
+		list_first_item(t->input_files);
+		while((tf = (struct work_queue_file*)list_next_item(files))) {
+			if(!strcmp(remote_name, tf->remote_name) && strcmp(file_name, tf->payload)) {
+				fprintf(stderr, "Error: input name %s conflicts with another input pointing to same remote name (%s).\n", file_name, remote_name);
+				return 0;
+			}
+		}
+		//check if there is an output file with the same remote name.
+		list_first_item(t->output_files);
+		while((tf = (struct work_queue_file*)list_next_item(t->input_files))) {
+			if(!strcmp(remote_name, tf->remote_name)){
+				fprintf(stderr, "Error: input name %s conflicts with an output pointing to same remote name (%s).\n", file_name, remote_name);
+				return 0;
+			}
+		}
+	} else {
+		files = t->output_files;
+
+		//check if two different different remote names map to the same s3 name for outputs.
+		list_first_item(t->output_files);
+		while((tf = (struct work_queue_file*)list_next_item(files))) {
+			if(!strcmp(file_name, tf->payload) && strcmp(remote_name, tf->remote_name)) {
+				fprintf(stderr, "Error: output remote name %s conflicts with another output pointing to same s3 name (%s).\n", remote_name, file_name);
+				return 0;
+			}
+		}
+
+		//check if there is an input file with the same remote name.
+		list_first_item(t->input_files);
+		while((tf = (struct work_queue_file*)list_next_item(t->input_files))) {
+			if(!strcmp(remote_name, tf->remote_name)){
+				fprintf(stderr, "Error: s3 output name %s conflicts with an input pointing to same remote name (%s).\n", file_name, remote_name);
+				return 0;
+			}
+		}
+	}
+
+	tf = work_queue_file_create(remote_name, WORK_QUEUE_URL, flags);
+	if(!tf) return 0;
+
+	tf->length = strlen(file_name);
+	tf->payload = xxstrdup(file_name);
 
 	list_push_tail(files, tf);
 
