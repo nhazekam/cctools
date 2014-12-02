@@ -161,6 +161,9 @@ static int total_tasks_executed = 0;
 static const char *project_regex = 0;
 static int released_by_master = 0;
 
+static const char access_key[] = NULL;
+static const char secret_key[] = NULL;
+
 __attribute__ (( format(printf,2,3) ))
 static void send_master_message( struct link *master, const char *fmt, ... )
 {
@@ -896,6 +899,33 @@ static int do_url(struct link* master, const char *filename, int length, int mod
         return file_from_url(url, cache_name);
 }
 
+static int file_from_s3(const char *s3name, const char *filename) {
+
+        debug(D_WQ, "Retrieving %s from (%s)\n", filename, s3name);
+        char command[WORK_QUEUE_LINE_MAX];
+        snprintf(command, WORK_QUEUE_LINE_MAX, "curl -f -o \"%s\" \"%s\"", filename, s3name);
+
+		if (system(command) == 0) {
+                debug(D_WQ, "Success, file retrieved from %s\n", s3name);
+        } else {
+                debug(D_WQ, "Failed to retrieve file from %s\n", s3name);
+                return 0;
+        }
+
+        return 1;
+}
+
+static int do_s3(struct link* master, const char *filename, int length, int mode) {
+
+        char s3name[WORK_QUEUE_LINE_MAX];
+        link_read(master, s3name, length, time(0) + active_timeout);
+
+        char cache_name[WORK_QUEUE_LINE_MAX];
+        snprintf(cache_name,WORK_QUEUE_LINE_MAX, "cache/%s", filename);
+
+        return file_from_s3(s3name, cache_name);
+}
+
 static int do_unlink(const char *path) {
 	char cached_path[WORK_QUEUE_LINE_MAX];
 	sprintf(cached_path, "cache/%s", path);
@@ -1169,8 +1199,10 @@ static int handle_master(struct link *master) {
 				debug(D_WQ, "Path - %s is not within workspace %s.", filename, workspace);
 				r= 0;
 			}
-                } else if(sscanf(line, "url %s %" SCNd64 " %o", filename, &length, &mode) == 3) {
-                        r = do_url(master, filename, length, mode);
+        } else if(sscanf(line, "url %s %" SCNd64 " %o", filename, &length, &mode) == 3) {
+            r = do_url(master, filename, length, mode);
+        } else if(sscanf(line, "s3 %s %" SCNd64 " %o", filename, &length, &mode) == 3) {
+            r = do_s3(master, filename, length, mode);
 		} else if(sscanf(line, "unlink %s", filename) == 1) {
 			if(path_within_dir(filename, workspace)) {
 				r = do_unlink(filename);
@@ -1636,6 +1668,7 @@ struct option long_options[] = {
 	{"specify-log",         required_argument,  0,  LONG_OPT_SPECIFY_LOG},
 	{"master-name",         required_argument,  0,  'M'},
 	{"password",            required_argument,  0,  'P'},
+	{"amazon-cred",         required_argument,  0,  'Q'},
 	{"timeout",             required_argument,  0,  't'},
 	{"idle-timeout",        required_argument,  0,  LONG_OPT_IDLE_TIMEOUT},
 	{"connect-timeout",     required_argument,  0,  LONG_OPT_CONNECT_TIMEOUT},
@@ -1793,6 +1826,12 @@ int main(int argc, char *argv[])
 			exit(EXIT_SUCCESS);
 			break;
 		case 'P':
+			if(copy_file_to_buffer(optarg, &password, NULL) < 0) {
+				fprintf(stderr,"work_queue_worker: couldn't load password from %s: %s\n",optarg,strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+			break;
+		case 'Q':
 			if(copy_file_to_buffer(optarg, &password, NULL) < 0) {
 				fprintf(stderr,"work_queue_worker: couldn't load password from %s: %s\n",optarg,strerror(errno));
 				exit(EXIT_FAILURE);
