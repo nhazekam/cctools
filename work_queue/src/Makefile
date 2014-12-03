@@ -28,7 +28,7 @@ LIBDTTOOLS = ${CCTOOLS_HOME}/dttools/src/libdttools.a
 LIBCHIRP = $(CCTOOLS_HOME)/chirp/src/libchirp.a
 EXTERNALS = $(LIBDTTOOLS) $(LIBCHIRP)
 
-EXTERNAL_DEPENDENCIES = ../../chirp/src/libchirp.a ../../dttools/src/libdttools.a
+EXTERNAL_DEPENDENCIES = ../../chirp/src/libchirp.a ../../dttools/src/libdttools.a libs3-master/lib/libs3.a
 LIBRARIES = libwork_queue.a
 OBJECTS = $(OBJECTS_LIBRARY) $(OBJECTS_WORKER) work_queue_test_main.o mpi_queue_worker.o
 OBJECTS_LIBRARY = $(SOURCES_LIBRARY:%.c=%.o)
