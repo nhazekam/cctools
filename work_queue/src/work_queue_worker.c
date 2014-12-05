@@ -237,7 +237,7 @@ static int putObjectDataCallback(int bufferSize, char *buffer, void *callbackDat
     return ret;
 }
 
-void object_create(const char *access_key, const char *secret_key, const char *bucket_name, const char *object_name)
+void object_create(const char *access_key, const char *secret_key, const char *bucket_name, const char *object_name, const char *local_name)
 {
     S3ResponseHandler responseHandler =
     {
@@ -257,8 +257,8 @@ void object_create(const char *access_key, const char *secret_key, const char *b
 
     put_object_callback_data data;
     struct stat statbuf;
-    if (stat(object_name, &statbuf) == -1) {
-        fprintf(stderr, "\nERROR: Failed to stat file %s: ", object_name);
+    if (stat(local_name, &statbuf) == -1) {
+        fprintf(stderr, "\nERROR: Failed to stat file %s: ", local_name);
         perror(0);
         exit(-1);
     }
@@ -266,8 +266,8 @@ void object_create(const char *access_key, const char *secret_key, const char *b
     int contentLength = statbuf.st_size;
     data.contentLength = contentLength;
 
-    if (!(data.infile = fopen(object_name, "r"))) {
-        fprintf(stderr, "\nERROR: Failed to open input file %s: ", object_name);
+    if (!(data.infile = fopen(local_name, "r"))) {
+        fprintf(stderr, "\nERROR: Failed to open input file %s: ", local_name);
         perror(0);
         exit(-1);
     }
@@ -289,8 +289,9 @@ static S3Status getObjectDataCallback(int bufferSize, const char *buffer, void *
         return ((wrote < (size_t) bufferSize) ? S3StatusAbortedByCallback : S3StatusOK);
 }
 
-void object_download(const char *access_key, const char *secret_key, const char *bucket_name, const char *object_name)
+int object_download(const char *access_key, const char *secret_key, const char *bucket_name, const char *object_name, const char *local_name)
 {
+    debug(D_WQ, "Bucket : %s\tAccess : %s\tSecret : %s\n", bucket_name, access_key, secret_key);
     S3ResponseHandler responseHandler =
     {
         &responsePropertiesCallback,
@@ -313,10 +314,14 @@ void object_download(const char *access_key, const char *secret_key, const char 
         &getObjectDataCallback
     };
 
-    char *test_object_name = malloc(S3_MAX_KEY_SIZE);
-    strcpy(test_object_name, object_name);
-    FILE *outfile = fopen(strcat(test_object_name, "_test"), "w");
+    FILE *outfile = fopen(local_name, "w");
     S3_get_object(&bucketContext, object_name, NULL, 0, 0, NULL, &getObjectHandler, outfile);
+	
+	if( access( outfile, F_OK ) != -1 ) {
+		return 1;
+    } else {
+		return 0;
+    }
 }
 
 static int recv_master_message( struct link *master, char *line, int length, time_t stoptime )
@@ -1036,39 +1041,37 @@ static int do_url(struct link* master, const char *filename, int length, int mod
         return file_from_url(url, cache_name);
 }
 
-static int file_from_s3(const char *s3bucket, const char *s3name) {
+static int file_from_s3(const char *s3bucket, const char *s3name, const char *local_name) {
 
         debug(D_WQ, "Retrieving %s from (%s/%s)\n", s3name, s3bucket, s3name);
 		s3_connect();
-		object_download(access_key, secret_key, s3bucket, s3name);
+		int res = object_download(access_key, secret_key, s3bucket, s3name, local_name);
 		s3_disconnect();
 
-        return 1;
+        return res;
 }
 
-static int file_to_s3(const char *s3bucket, const char *s3name) {
+static int file_to_s3(const char *s3bucket, const char *s3name, const char *local_name) {
 
         debug(D_WQ, "Putting %s to (%s/%s)\n", s3name, s3bucket, s3name);
 		s3_connect();
-		object_create(access_key, secret_key, s3bucket, s3name);
+		object_create(access_key, secret_key, s3bucket, s3name, local_name);
 		s3_disconnect();
 
         return 1;
 }
 
-static int do_s3_put(struct link* master, const char *bucket, const char *filename, int length, int mode) {
+static int do_s3_put(const char *bucket, const char *filename, const char *cache_name) {
 
-        char s3name[WORK_QUEUE_LINE_MAX];
-        link_read(master, s3name, length, time(0) + active_timeout);
+        char ncache_name[WORK_QUEUE_LINE_MAX];
+        snprintf(ncache_name,WORK_QUEUE_LINE_MAX, "cache/%s", cache_name);
 
-        char cache_name[WORK_QUEUE_LINE_MAX];
-        snprintf(cache_name,WORK_QUEUE_LINE_MAX, "cache/%s", filename);
-
-        return file_from_s3(bucket, filename);
+        file_from_s3(bucket, filename, ncache_name);
+        return 1;
 }
 
-static int do_s3_get(struct link *master, const char *bucket, const char *filename, int recursive) {
-	file_to_s3(bucket, filename);
+static int do_s3_get(struct link *master, const char *bucket, const char *filename, const char *cache_name) {
+	file_to_s3(bucket, filename, cache_name);
 	send_master_message(master, "end\n");
 	return 1;
 }
@@ -1331,6 +1334,7 @@ static int handle_master(struct link *master) {
 	char line[WORK_QUEUE_LINE_MAX];
 	char bucket[WORK_QUEUE_LINE_MAX];
 	char filename[WORK_QUEUE_LINE_MAX];
+	char cachename[WORK_QUEUE_LINE_MAX];
 	char path[WORK_QUEUE_LINE_MAX];
 	int64_t length;
 	int64_t taskid = 0;
@@ -1349,8 +1353,8 @@ static int handle_master(struct link *master) {
 			}
         } else if(sscanf(line, "url %s %" SCNd64 " %o", filename, &length, &mode) == 3) {
             r = do_url(master, filename, length, mode);
-        } else if(sscanf(line, "ps3 %s %s %" SCNd64 " %o", bucket, filename, &length, &mode) == 3) {
-            r = do_s3_put(master, bucket, filename, length, mode);
+        } else if(sscanf(line, "ps3 %s %s %s", bucket, filename, cachename) == 3) {
+            r = do_s3_put(bucket, filename, cachename);
 		} else if(sscanf(line, "unlink %s", filename) == 1) {
 			if(path_within_dir(filename, workspace)) {
 				r = do_unlink(filename);
@@ -1360,8 +1364,8 @@ static int handle_master(struct link *master) {
 			}
 		} else if(sscanf(line, "get %s %d", filename, &mode) == 2) {
 			r = do_get(master, filename, mode);
-		} else if(sscanf(line, "gs3 %s %s %d", bucket, filename, &mode) == 2) {
-			r = do_s3_get(master, bucket, filename, mode);
+		} else if(sscanf(line, "gs3 %s %s %s", bucket, filename, cachename) == 3) {
+			r = do_s3_get(master, bucket, filename, cachename);
 		} else if(sscanf(line, "thirdget %o %s %[^\n]", &mode, filename, path) == 3) {
 			r = do_thirdget(mode, filename, path);
 		} else if(sscanf(line, "thirdput %o %s %[^\n]", &mode, filename, path) == 3) {
@@ -1801,7 +1805,7 @@ static void show_help(const char *cmd)
 enum {LONG_OPT_DEBUG_FILESIZE = 256, LONG_OPT_VOLATILITY, LONG_OPT_BANDWIDTH,
       LONG_OPT_DEBUG_RELEASE, LONG_OPT_SPECIFY_LOG, LONG_OPT_CORES, LONG_OPT_MEMORY,
       LONG_OPT_DISK, LONG_OPT_GPUS, LONG_OPT_FOREMAN, LONG_OPT_FOREMAN_PORT, LONG_OPT_DISABLE_SYMLINKS,
-      LONG_OPT_IDLE_TIMEOUT, LONG_OPT_CONNECT_TIMEOUT};
+      LONG_OPT_IDLE_TIMEOUT, LONG_OPT_CONNECT_TIMEOUT, LONG_OPT_AMAZON_ACCESS, LONG_OPT_AMAZON_SECRET};
 
 struct option long_options[] = {
 	{"advertise",           no_argument,        0,  'a'},
@@ -1818,7 +1822,8 @@ struct option long_options[] = {
 	{"specify-log",         required_argument,  0,  LONG_OPT_SPECIFY_LOG},
 	{"master-name",         required_argument,  0,  'M'},
 	{"password",            required_argument,  0,  'P'},
-	{"amazon-cred",         required_argument,  0,  'Q'},
+	{"amazon-access",       required_argument,  0,  LONG_OPT_AMAZON_ACCESS},
+	{"amazon-secret",       required_argument,  0,  LONG_OPT_AMAZON_SECRET},
 	{"timeout",             required_argument,  0,  't'},
 	{"idle-timeout",        required_argument,  0,  LONG_OPT_IDLE_TIMEOUT},
 	{"connect-timeout",     required_argument,  0,  LONG_OPT_CONNECT_TIMEOUT},
@@ -1981,12 +1986,6 @@ int main(int argc, char *argv[])
 				exit(EXIT_FAILURE);
 			}
 			break;
-		case 'Q':
-			if(copy_file_to_buffer(optarg, &password, NULL) < 0) {
-				fprintf(stderr,"work_queue_worker: couldn't load password from %s: %s\n",optarg,strerror(errno));
-				exit(EXIT_FAILURE);
-			}
-			break;
 		case 'Z':
 			port_file = xxstrdup(optarg);
 			worker_mode = WORKER_MODE_FOREMAN;
@@ -2030,6 +2029,12 @@ int main(int argc, char *argv[])
 			break;
 		case LONG_OPT_DISABLE_SYMLINKS:
 			symlinks_enabled = 0;
+			break;
+		case LONG_OPT_AMAZON_ACCESS:
+			access_key = xxstrdup(optarg);
+			break;
+		case LONG_OPT_AMAZON_SECRET:
+			secret_key = xxstrdup(optarg);
 			break;
 		case 'h':
 			show_help(argv[0]);
