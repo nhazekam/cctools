@@ -193,28 +193,28 @@ static S3Status responsePropertiesCallback(const S3ResponseProperties *propertie
 static void responseCompleteCallback(S3Status status, const S3ErrorDetails *error, void *callbackData)
 {
     if (status == S3StatusOK)
-        fprintf(stderr, "\nOK.\n");
+		debug(D_WQ, "s3 : Successful Callback (%i)", status);
     else if (status == S3StatusErrorMethodNotAllowed)
-        fprintf(stderr, "\nInvalid object name!\n");
+		debug(D_WQ, "s3 : Invalid Object Name (%i)", status);
     else if (status == S3StatusErrorMetadataTooLarge)
-        fprintf(stderr, "\nInvalid bucket name!\n");
+		debug(D_WQ, "s3 : Invalid Bucket Name (%i)", status);
     else if (status == S3StatusErrorUnknown)
-        fprintf(stderr, "\nUnknown Problem!!\n");
+		debug(D_WQ, "s3 : Unknown Error (%i)", status);
     else
-        fprintf(stderr, "\nReally Unknown problem!!!: %i\n", status);
+		debug(D_WQ, "s3 : Unhandled Error (%i)", status);
     return;
 }
 
 void s3_connect()
 {
     S3_initialize("s3", S3_INIT_ALL, S3_DEFAULT_HOSTNAME);
-    fprintf(stderr, "\nOK.\n");
+    debug(D_WQ, "s3 : initiated connection (%s)",S3_DEFAULT_HOSTNAME);
 }
 
 void s3_disconnect()
 {
     S3_deinitialize();
-    fprintf(stderr, "\nOK.\n");
+    debug(D_WQ, "s3 : deinitialized connection");
 }
 
 typedef struct put_object_callback_data
@@ -237,7 +237,7 @@ static int putObjectDataCallback(int bufferSize, char *buffer, void *callbackDat
     return ret;
 }
 
-void object_create(const char *access_key, const char *secret_key, const char *bucket_name, const char *object_name, const char *local_name)
+int object_create(const char *access_key, const char *secret_key, const char *bucket_name, const char *object_name, const char *local_name)
 {
     S3ResponseHandler responseHandler =
     {
@@ -256,20 +256,19 @@ void object_create(const char *access_key, const char *secret_key, const char *b
     };
 
     put_object_callback_data data;
+
     struct stat statbuf;
     if (stat(local_name, &statbuf) == -1) {
-        fprintf(stderr, "\nERROR: Failed to stat file %s: ", local_name);
-        perror(0);
-        exit(-1);
+		debug(D_WQ, "s3 : Failed to stat file (%s)",local_name);
+		return 0;
     }
 
     int contentLength = statbuf.st_size;
     data.contentLength = contentLength;
 
     if (!(data.infile = fopen(local_name, "r"))) {
-        fprintf(stderr, "\nERROR: Failed to open input file %s: ", local_name);
-        perror(0);
-        exit(-1);
+		debug(D_WQ, "s3 : Failed to open file (%s)",local_name);
+		return 0;
     }
 
     S3PutObjectHandler putObjectHandler =
@@ -279,6 +278,7 @@ void object_create(const char *access_key, const char *secret_key, const char *b
     };
 
     S3_put_object(&bucketContext, object_name, contentLength, NULL, NULL, &putObjectHandler, &data);
+	return 1;
 }
 
 
@@ -291,7 +291,6 @@ static S3Status getObjectDataCallback(int bufferSize, const char *buffer, void *
 
 int object_download(const char *access_key, const char *secret_key, const char *bucket_name, const char *object_name, const char *local_name)
 {
-    debug(D_WQ, "Bucket : %s\tAccess : %s\tSecret : %s\n", bucket_name, access_key, secret_key);
     S3ResponseHandler responseHandler =
     {
         &responsePropertiesCallback,
@@ -317,9 +316,10 @@ int object_download(const char *access_key, const char *secret_key, const char *
     FILE *outfile = fopen(local_name, "w");
     S3_get_object(&bucketContext, object_name, NULL, 0, 0, NULL, &getObjectHandler, outfile);
 	
-	if( access( outfile, F_OK ) != -1 ) {
+	if( access( local_name, F_OK ) != -1 ) {
 		return 1;
     } else {
+		debug(D_WQ, "s3 : File was not created (%s)",local_name);
 		return 0;
     }
 }
@@ -1043,7 +1043,7 @@ static int do_url(struct link* master, const char *filename, int length, int mod
 
 static int file_from_s3(const char *s3bucket, const char *s3name, const char *local_name) {
 
-        debug(D_WQ, "Retrieving %s from (%s/%s)\n", s3name, s3bucket, s3name);
+        debug(D_WQ, "Retrieving %s from (%s/%s)\n", local_name, s3bucket, s3name);
 		s3_connect();
 		int res = object_download(access_key, secret_key, s3bucket, s3name, local_name);
 		s3_disconnect();
@@ -1053,25 +1053,29 @@ static int file_from_s3(const char *s3bucket, const char *s3name, const char *lo
 
 static int file_to_s3(const char *s3bucket, const char *s3name, const char *local_name) {
 
-        debug(D_WQ, "Putting %s to (%s/%s)\n", s3name, s3bucket, s3name);
+        debug(D_WQ, "Putting %s to (%s/%s)\n", local_name, s3bucket, s3name);
 		s3_connect();
-		object_create(access_key, secret_key, s3bucket, s3name, local_name);
+		int res = object_create(access_key, secret_key, s3bucket, s3name, local_name);
 		s3_disconnect();
 
-        return 1;
+        return res;
 }
 
-static int do_s3_put(const char *bucket, const char *filename, const char *cache_name) {
+static int do_s3_put(struct link *master, const char *bucket, const char *s3name, const char *cache_name) {
 
         char ncache_name[WORK_QUEUE_LINE_MAX];
         snprintf(ncache_name,WORK_QUEUE_LINE_MAX, "cache/%s", cache_name);
 
-        file_from_s3(bucket, filename, ncache_name);
+        file_from_s3(bucket, s3name, ncache_name);
         return 1;
 }
 
 static int do_s3_get(struct link *master, const char *bucket, const char *filename, const char *cache_name) {
-	file_to_s3(bucket, filename, cache_name);
+		
+	char cached_filename[WORK_QUEUE_LINE_MAX];
+	sprintf(cached_filename, "cache/%s", cache_name);
+
+	file_to_s3(bucket, filename, cached_filename);
 	send_master_message(master, "end\n");
 	return 1;
 }
@@ -1333,6 +1337,7 @@ static void disconnect_master(struct link *master) {
 static int handle_master(struct link *master) {
 	char line[WORK_QUEUE_LINE_MAX];
 	char bucket[WORK_QUEUE_LINE_MAX];
+	char s3name[WORK_QUEUE_LINE_MAX];
 	char filename[WORK_QUEUE_LINE_MAX];
 	char cachename[WORK_QUEUE_LINE_MAX];
 	char path[WORK_QUEUE_LINE_MAX];
@@ -1353,8 +1358,8 @@ static int handle_master(struct link *master) {
 			}
         } else if(sscanf(line, "url %s %" SCNd64 " %o", filename, &length, &mode) == 3) {
             r = do_url(master, filename, length, mode);
-        } else if(sscanf(line, "ps3 %s %s %s", bucket, filename, cachename) == 3) {
-            r = do_s3_put(bucket, filename, cachename);
+        } else if(sscanf(line, "ps3 %s %s %s", bucket, s3name, cachename) == 3) {
+            r = do_s3_put(master, bucket, s3name, cachename);
 		} else if(sscanf(line, "unlink %s", filename) == 1) {
 			if(path_within_dir(filename, workspace)) {
 				r = do_unlink(filename);

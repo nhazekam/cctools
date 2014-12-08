@@ -879,11 +879,11 @@ static int get_file_or_directory( struct work_queue *q, struct work_queue_worker
 	return result;
 }
 
-static int do_s3_get( struct work_queue *q, struct work_queue_worker *w, const char *cache_name, const char *bucket_name, const char *filename)
+static int do_s3_get( struct work_queue *q, struct work_queue_worker *w, const char *bucket_name, const char *filename, const char *remote_name)
 {
 	// Send the name of the file/dir name to fetch
-	debug(D_WQ, "%s (%s) sending %s to %s", w->hostname, w->addrport, filename, bucket_name);
-	send_worker_msg(q,w, "gs3 %s %s %s\n",bucket_name, filename, cache_name);
+	debug(D_WQ, "%s (%s) sending %s to %s/%s", w->hostname, w->addrport, remote_name, bucket_name, filename);
+	send_worker_msg(q,w, "gs3 %s %s %s\n",bucket_name, filename, remote_name);
 
 	int result = SUCCESS; //return success unless something fails below
 
@@ -913,7 +913,7 @@ static int do_s3_get( struct work_queue *q, struct work_queue_worker *w, const c
 	// If we failed to *transfer* the output file, then that is a hard
 	// failure which causes this function to return failure and the task
 	// to be returned to the queue to be attempted elsewhere.
-	debug(D_WQ, "%s (%s) failed to return output %s to %s", w->addrport, w->hostname, filename, cache_name);
+	debug(D_WQ, "%s (%s) failed to return output %s to %s/%s", w->addrport, w->hostname, remote_name, bucket_name, filename);
 	return result;
 }
 /*
@@ -956,7 +956,7 @@ char * make_cached_name( struct work_queue_task *t, struct work_queue_file *f )
 			return string_format("url-%s",md5_string(digest));
 			break;
 		case WORK_QUEUE_S3:
-			return string_format("s3-%s",md5_string(digest));
+			return string_format("s3-%s-%s",md5_string(digest),payload_enc);
 			break;
 		case WORK_QUEUE_BUFFER:
 		default:
@@ -1009,7 +1009,7 @@ static int get_output_file( struct work_queue *q, struct work_queue_worker *w, s
 	} else if(f->type == WORK_QUEUE_REMOTECMD) {
 		result = do_thirdput(q,w,cached_name,f->payload,WORK_QUEUE_FS_CMD);
 	} else if(f->type == WORK_QUEUE_S3) {
-		result = do_s3_get(q,w,cached_name,f->payload, f->remote_name);
+		result = do_s3_get(q,w,f->bucket_name,f->payload, cached_name) ;
 	} else {
 		result = get_file_or_directory(q, w, t, cached_name, f->payload, &total_bytes);
 	}
@@ -2188,8 +2188,7 @@ static int send_input_file(struct work_queue *q, struct work_queue_worker *w, st
 
 	case WORK_QUEUE_S3:
 		debug(D_WQ, "%s (%s) needs %s from the s3, %s %d", w->hostname, w->addrport, cached_name, f->payload, f->length);
-		send_worker_msg(q,w, "ps3 %s %s %s\n",f->payload, f->remote_name, cached_name);
-		link_putlstring(w->link, f->payload, f->length, time(0) + q->short_timeout);
+		send_worker_msg(q,w, "ps3 %s %s %s\n",f->bucket_name,f->payload, cached_name);
 		break;
 
 	case WORK_QUEUE_DIRECTORY:
@@ -3326,13 +3325,13 @@ int work_queue_task_specify_url(struct work_queue_task *t, const char *file_url,
 	return 1;
 }
 
-int work_queue_task_specify_s3(struct work_queue_task *t, const char *bucket_name, const char *remote_name, int type, int flags)
+int work_queue_task_specify_s3(struct work_queue_task *t, const char *bucket_name, const char *s3_name, const char *remote_name, int type, int flags)
 {
 	struct list *files;
 	struct work_queue_file *tf;
 
-	if(!t || !bucket_name || !remote_name) {
-		fprintf(stderr, "Error: Null arguments for task, file name, and remote name not allowed in specify_s3.\n");
+	if(!t || !bucket_name || !s3_name || !remote_name) {
+		fprintf(stderr, "Error: Null arguments for task, bucket name, file name, and remote name not allowed in specify_s3.\n");
 		return 0;
 	}
 	if(bucket_name[0] == '/') {
@@ -3349,8 +3348,9 @@ int work_queue_task_specify_s3(struct work_queue_task *t, const char *bucket_nam
 	tf = work_queue_file_create(remote_name, WORK_QUEUE_S3, flags);
 	if(!tf) return 0;
 
-	tf->length = strlen(bucket_name);
-	tf->payload = xxstrdup(bucket_name);
+	tf->bucket_name = xxstrdup(bucket_name);
+	tf->length = strlen(s3_name);
+	tf->payload = xxstrdup(s3_name);
 	tf->remote_name = xxstrdup(remote_name);
 
 	list_push_tail(files, tf);

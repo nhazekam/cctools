@@ -223,7 +223,7 @@ int work_queue_task_specify_file(struct work_queue_task *t, const char *local_na
 @return 1 if the task file piece is successfully specified, 0 if either of @a t, @a local_name, or @a remote_name is null or @a remote_name is an absolute path.
 */
 
-int work_queue_task_specify_s3(struct work_queue_task *t, const char *s3_name, const char *remote_name, int type, int flags);
+int work_queue_task_specify_s3(struct work_queue_task *t, const char *bucket_name, const char *s3_name, const char *remote_name, int type, int flags);
 
 /** Add a file piece to a task.
 @param t A task object.

@@ -25,6 +25,7 @@ struct work_queue_file {
 	int length;		// length of payload, only used for non-file objects like buffers and urls
 	off_t offset;		// file offset for WORK_QUEUE_FILE_PIECE
 	off_t piece_length;	// file piece length for WORK_QUEUE_FILE_PIECE
+	char *bucket_name;	// s3 bucket name.
 	char *payload;		// name on master machine or buffer of data.
 	char *remote_name;	// name on remote machine.
 };
