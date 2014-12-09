@@ -3816,7 +3816,7 @@ struct work_queue *work_queue_create(int port)
 	q->process_pending_check = 0;
 	q->workers_to_wait = 0;
 
-	q->short_timeout = 5;
+	q->short_timeout = 120;
 	q->long_timeout = 3600;
 
 	q->stats->start_time = timestamp_get();
