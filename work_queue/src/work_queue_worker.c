@@ -163,8 +163,8 @@ static int total_tasks_executed = 0;
 static const char *project_regex = 0;
 static int released_by_master = 0;
 
-static const char *access_key = NULL;
-static const char *secret_key = NULL;
+static const char *access_key = "AKIAJHMTDN66VCBOW22Q";
+static const char *secret_key = "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";
 
 __attribute__ (( format(printf,2,3) ))
 static void send_master_message( struct link *master, const char *fmt, ... )
