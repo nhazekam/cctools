@@ -237,7 +237,7 @@ static int putObjectDataCallback(int bufferSize, char *buffer, void *callbackDat
     return ret;
 }
 
-int object_create(const char *access_key, const char *secret_key, const char *bucket_name, const char *object_name, const char *local_name)
+int object_create(struct link *master, const char *access_key, const char *secret_key, const char *bucket_name, const char *object_name, const char *local_name)
 {
     S3ResponseHandler responseHandler =
     {
@@ -1051,11 +1051,11 @@ static int file_from_s3(const char *s3bucket, const char *s3name, const char *lo
         return res;
 }
 
-static int file_to_s3(const char *s3bucket, const char *s3name, const char *local_name) {
+static int file_to_s3(struct link *master, const char *s3bucket, const char *s3name, const char *local_name) {
 
         debug(D_WQ, "Putting %s to (%s/%s)\n", local_name, s3bucket, s3name);
 		s3_connect();
-		int res = object_create(access_key, secret_key, s3bucket, s3name, local_name);
+		int res = object_create(master, access_key, secret_key, s3bucket, s3name, local_name);
 		s3_disconnect();
 
         return res;
@@ -1075,7 +1075,7 @@ static int do_s3_get(struct link *master, const char *bucket, const char *filena
 	char cached_filename[WORK_QUEUE_LINE_MAX];
 	sprintf(cached_filename, "cache/%s", cache_name);
 
-	file_to_s3(bucket, filename, cached_filename);
+	file_to_s3(master, bucket, filename, cached_filename);
 	send_master_message(master, "end\n");
 	return 1;
 }
