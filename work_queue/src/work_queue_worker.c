@@ -276,6 +276,8 @@ int object_create(struct link *master, const char *access_key, const char *secre
         responseHandler,
         &putObjectDataCallback
     };
+	
+	send_master_message(master, "s3 %s %"SCNd64"\n", local_name, contentLength);
 
     S3_put_object(&bucketContext, object_name, contentLength, NULL, NULL, &putObjectHandler, &data);
 	return 1;

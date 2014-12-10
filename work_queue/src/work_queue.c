@@ -879,30 +879,37 @@ static int get_file_or_directory( struct work_queue *q, struct work_queue_worker
 	return result;
 }
 
-static int do_s3_get( struct work_queue *q, struct work_queue_worker *w, const char *bucket_name, const char *filename, const char *remote_name)
+static int do_s3_get( struct work_queue *q, struct work_queue_worker *w, struct work_queue_task *t, const char *bucket_name, const char *filename, const char *remote_name)
 {
 	// Send the name of the file/dir name to fetch
 	debug(D_WQ, "%s (%s) sending %s to %s/%s", w->hostname, w->addrport, remote_name, bucket_name, filename);
 	send_worker_msg(q,w, "gs3 %s %s %s\n",bucket_name, filename, remote_name);
 
 	int result = SUCCESS; //return success unless something fails below
+	time_t stoptime = time(0);
 
 	// Process the recursive file/dir responses as they are sent.
 	while(1) {
 		char line[WORK_QUEUE_LINE_MAX];
+		char tmp_remote_path[WORK_QUEUE_LINE_MAX];
+		int64_t length;
 
-		if(recv_worker_msg_retry(q, w, line, sizeof(line)) < 0) {
+		if((recv_worker_msg_retry(q, w, line, sizeof(line)) < 0) && (time(0) > stoptime)) {
 			result = WORKER_FAILURE;
 			break;
 		}
 
-		if(!strcmp(line,"end")) {
+		if(sscanf(line,"s3 %s %"SCNd64, tmp_remote_path, &length)==2) {
+			stoptime = time(0) + get_transfer_wait_time(q, w, t, length);
+		} else if(!strcmp(line,"end")) {
 			// We have to return on receiving an end message.
 			if (result == SUCCESS) {
 				return result;
 			} else {
 				break;
 			}
+		} else if ((result == -1) && (time(0) < stoptime)){
+			// Waiting for time out
 		} else {
 			debug(D_WQ, "%s (%s): sent invalid response to gs3: %s",w->hostname,w->addrport,line);
 			result = WORKER_FAILURE; //signal sys-level failure
@@ -1009,7 +1016,7 @@ static int get_output_file( struct work_queue *q, struct work_queue_worker *w, s
 	} else if(f->type == WORK_QUEUE_REMOTECMD) {
 		result = do_thirdput(q,w,cached_name,f->payload,WORK_QUEUE_FS_CMD);
 	} else if(f->type == WORK_QUEUE_S3) {
-		result = do_s3_get(q,w,f->bucket_name,f->payload, cached_name) ;
+		result = do_s3_get(q,w,t,f->bucket_name,f->payload, cached_name) ;
 	} else {
 		result = get_file_or_directory(q, w, t, cached_name, f->payload, &total_bytes);
 	}
@@ -3816,7 +3823,7 @@ struct work_queue *work_queue_create(int port)
 	q->process_pending_check = 0;
 	q->workers_to_wait = 0;
 
-	q->short_timeout = 240;
+	q->short_timeout = 5;
 	q->long_timeout = 3600;
 
 	q->stats->start_time = timestamp_get();
