@@ -152,7 +152,6 @@ void makeflow_log_file_state_change( struct dag *d, struct dag_file *f, int news
 	fprintf(d->logfile, "# %d %s %" PRIu64 "\n", f->state, f->filename, time);
 	if(f->state == DAG_FILE_STATE_EXISTS){
 		d->completed_files += 1;
-		f->creation_logged = (time_t) (time / 1000000);
 	} else if(f->state == DAG_FILE_STATE_DELETE) {
 		d->deleted_files += 1;
 	}

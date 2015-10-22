@@ -573,7 +573,7 @@ static void makeflow_dispatch_ready_jobs(struct dag *d)
 		if(dag_remote_jobs_running(d) >= remote_jobs_max && dag_local_jobs_running(d) >= local_jobs_max)
 			break;
 
-		if(makeflow_node_ready(d, n)) {
+		if(makeflow_node_ready(d, n)){
 			makeflow_node_submit(d, n);
 		}
 	}
@@ -601,6 +601,9 @@ int makeflow_node_check_file_was_created(struct dag_node *n, struct dag_file *f)
 			/* File was created and has length larger than zero. */
 			debug(D_MAKEFLOW_RUN, "File %s created by rule %d.\n", f->filename, n->nodeid);
 			makeflow_log_file_state_change(n->d, f, DAG_FILE_STATE_EXISTS);
+			f->creation_logged = buf.st_mtime;
+			f->file_size = buf.st_size;
+			n->d->total_file_size += f->file_size;
 			file_created = 1;
 			break;
 		}

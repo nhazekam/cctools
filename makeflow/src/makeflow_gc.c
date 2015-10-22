@@ -147,9 +147,10 @@ int makeflow_clean_file( struct dag *d, struct batch_queue *queue, struct dag_fi
 		if(!silent)
 			debug(D_NOTICE, "Makeflow: Deleted path %s\n", f->filename);
 	} else if(errno != ENOENT) {
-		if(f->state == DAG_FILE_STATE_EXPECT || dag_file_should_exist(f))
+		if(f->state == DAG_FILE_STATE_EXPECT || dag_file_should_exist(f)){
 			makeflow_log_file_state_change(d, f, DAG_FILE_STATE_DELETE);
-
+			d->total_file_size -= f->file_size;
+		}
 		if(!silent) {
 			debug(D_NOTICE, "Makeflow: Couldn't delete %s: %s\n", f->filename, strerror(errno));
 			return 1;
@@ -252,6 +253,21 @@ static void makeflow_gc_all( struct dag *d, struct batch_queue *queue, int maxfi
 
 /* Collect garbage only if conditions warrant. */
 
+int makeflow_gc_check_file_count( struct dag *d, int count )
+{
+	return d->completed_files - d->deleted_files > count;
+}
+
+int makeflow_gc_check_file_size( struct dag *d, uint64_t size )
+{
+	return d->total_file_size > size;
+}
+
+int makeflow_gc_check_disk_size( const char *dir, uint64_t limit )
+{
+	return directory_low_disk(dir, limit);
+}
+
 void makeflow_gc( struct dag *d, struct batch_queue *queue, makeflow_gc_method_t method, uint64_t size, int count )
 {
 	if(size == 0)
@@ -264,14 +280,19 @@ void makeflow_gc( struct dag *d, struct batch_queue *queue, makeflow_gc_method_t
 		makeflow_gc_all(d, queue, count);
 		break;
 	case MAKEFLOW_GC_ON_DEMAND:
-		if(d->completed_files - d->deleted_files > count || directory_low_disk(".",size)){
+		if(makeflow_gc_check_file_count(d, count) || makeflow_gc_check_disk_size(".",size)){
 			debug(D_MAKEFLOW_RUN, "Performing on demand (%d) garbage collection", count);
 			makeflow_gc_all(d, queue, INT_MAX);
 		}
 		break;
+	case MAKEFLOW_GC_USAGE:
+		if(makeflow_gc_check_file_size(d, size)) {
+			debug(D_MAKEFLOW_RUN, "Performing space usage (%d) garbage collection", count);
+			makeflow_gc_all(d, queue, INT_MAX);
+		}
 	case MAKEFLOW_GC_SIZE:
-		if(directory_low_disk(".", size)) {
-			debug(D_MAKEFLOW_RUN, "Performing size (%d) garbage collection", count);
+		if(makeflow_gc_check_disk_size(".", size)) {
+			debug(D_MAKEFLOW_RUN, "Performing disk remaining size (%d) garbage collection", count);
 			makeflow_gc_all(d, queue, INT_MAX);
 		}
 		break;

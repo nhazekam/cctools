@@ -41,6 +41,7 @@ struct dag {
 	struct itable *remote_job_table;    /* Mapping from unique integers dag_node->jobid to nodes. */
 	int completed_files;                /* Keeps a count of the rules in state recieved or beyond. */
 	int deleted_files;                  /* Keeps a count of the files delete in GC. */
+	uint64_t total_file_size;           /* Cumulative size of files created in Makeflow. */
 };
 
 struct dag *dag_create();

@@ -29,11 +29,12 @@ typedef enum {
 
 struct dag_file {
 	const char *filename;
-	struct list     *needed_by;              /* List of nodes that have this file as a source */
-	struct dag_node *created_by;             /* The node (if any) that created the file */
-	int    ref_count;                        /* How many nodes still to run need this file */
-	time_t creation_logged;                  /* Time that file creation is logged */
-	dag_file_state_t state;                  /* Enum: DAG_FILE_STATE_{INTIAL,EXPECT,...} */
+	struct list     *needed_by;		/* List of nodes that have this file as a source */
+	struct dag_node *created_by;	/* The node (if any) that created the file */
+	int    ref_count;				/* How many nodes still to run need this file */
+	off_t  file_size;				/* Time that file creation is logged */
+	time_t creation_logged;			/* Time that file creation is logged */
+	dag_file_state_t state;			/* Enum: DAG_FILE_STATE_{INTIAL,EXPECT,...} */
 };
 
 struct dag_file *dag_file_create( const char *filename );
