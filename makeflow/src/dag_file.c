@@ -21,6 +21,7 @@ struct dag_file * dag_file_create( const char *filename )
 	f->created_by = 0;
 	f->ref_count = 0;
 	f->state = DAG_FILE_STATE_UNKNOWN;
+	f->state = DAG_FILE_TYPE_INTERMEDIATE;
 	return f;
 }
 

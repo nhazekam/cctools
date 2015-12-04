@@ -96,6 +96,7 @@ void makeflow_parse_input_outputs( struct dag *d )
 		for(i = 0; i < argc; i++) {
 			d->completed_files += 1;
 			f = dag_file_lookup_or_create(d, argv[i]);
+			f->type = MAKEFLOW_FILE_TYPE_INPUT;
 			set_insert(d->inputs, f);
 			debug(D_MAKEFLOW_RUN, "Added %s to input list", f->filename);
 		}
@@ -105,11 +106,12 @@ void makeflow_parse_input_outputs( struct dag *d )
 	}
 	/* add all source files */
 	hash_table_firstkey(d->files);
-	while((hash_table_nextkey(d->files, &filename, (void **) &f)))
+	while((hash_table_nextkey(d->files, &filename, (void **) &f))){
 		if(dag_file_is_source(f)) {
 			set_insert(d->inputs, f);
 			debug(D_MAKEFLOW_RUN, "Added %s to input list", f->filename);
 		}
+	}
 
 	if(output_list) {
 		/* remove files from preserve_list */
@@ -117,6 +119,7 @@ void makeflow_parse_input_outputs( struct dag *d )
 		for(i = 0; i < argc; i++) {
 			/* Must initialize to non-zero for hash_table functions to work properly. */
 			f = dag_file_lookup_or_create(d, argv[i]);
+			f->type = MAKEFLOW_FILE_TYPE_OUTPUT;
 			set_remove(d->outputs, f);
 			debug(D_MAKEFLOW_RUN, "Added %s to output list", f->filename);
 		}
@@ -125,11 +128,13 @@ void makeflow_parse_input_outputs( struct dag *d )
 		debug(D_NOTICE, "MAKEFLOW_OUTPUTS is not specified");
 		/* add all sink if OUTPUTS not specified */
 		hash_table_firstkey(d->files);
-		while((hash_table_nextkey(d->files, &filename, (void **) &f)))
+		while((hash_table_nextkey(d->files, &filename, (void **) &f))){
 			if(dag_file_is_sink(f)) {
+				f->type = MAKEFLOW_FILE_TYPE_OUTPUT;
 				set_insert(d->outputs, f);
 				debug(D_MAKEFLOW_RUN, "Added %s to output list", f->filename);
 			}
+		}
 	}
 }
 

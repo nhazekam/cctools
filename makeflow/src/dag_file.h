@@ -26,15 +26,22 @@ typedef enum {
 	DAG_FILE_STATE_UP
 } dag_file_state_t;
 
+typedef enum {
+	DAG_FILE_TYPE_INPUT,
+	DAG_FILE_TYPE_OUTPUT,
+	DAG_FILE_TYPE_INTERMEDIATE
+} dag_file_type_t;
+
 
 struct dag_file {
 	const char *filename;
 	struct list     *needed_by;		/* List of nodes that have this file as a source */
 	struct dag_node *created_by;	/* The node (if any) that created the file */
 	int    ref_count;				/* How many nodes still to run need this file */
-	off_t  file_size;				/* Time that file creation is logged */
+	off_t  file_size;				/* File size used for calculating node size */
 	time_t creation_logged;			/* Time that file creation is logged */
 	dag_file_state_t state;			/* Enum: DAG_FILE_STATE_{INTIAL,EXPECT,...} */
+	dag_file_type_t type;			/* Enum: DAG_FILE_TYPE_{INPUT,...} */
 };
 
 struct dag_file *dag_file_create( const char *filename );
