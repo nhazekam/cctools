@@ -52,6 +52,12 @@ struct dag_node {
 	struct list   *source_files;        /* list of dag_files of the node's requirements */
 	struct list   *target_files;        /* list of dag_files of the node's productions */
 
+	int64_t source_size;        /* size of dag_files of the node's requirements */
+	int64_t target_size;        /* size of dag_files of the node's productions */
+
+	struct list *res_nodes;
+	struct list *wgt_nodes;
+
 	struct dag_task_category *category; /* The set of task this node belongs too. Ideally, the makeflow
 										   file labeled which tasks have comparable resource usage. */
 	struct hash_table *variables;       /* This node settings for variables with @ syntax */
@@ -74,13 +80,22 @@ struct dag_node {
 	struct dag_node *next;              /* The next node in the list of nodes */
 };
 
+struct dag_node_size {
+	struct dag_node *n;
+	int64_t size;
+};
+
 struct dag_node *dag_node_create(struct dag *d, int linenum);
+struct dag_node_size *dag_node_size_create(struct dag_node *n, int64_t size);
 
 void dag_node_add_source_file(struct dag_node *n, const char *filename, char *remotename);
 void dag_node_add_target_file(struct dag_node *n, const char *filename, char *remotename);
 
 const char *dag_node_get_remote_name(struct dag_node *n, const char *filename );
 const char *dag_node_get_local_name(struct dag_node *n, const char *filename );
+
+void dag_node_prepare_node_size(struct dag_node *n);
+void dag_node_determine_footprint(struct dag_node *n);
 
 char *dag_node_resources_wrap_options(struct dag_node *n, const char *default_options, batch_queue_type_t batch_type);
 char *dag_node_resources_wrap_as_rmonitor_options(struct dag_node *n);

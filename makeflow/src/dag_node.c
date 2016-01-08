@@ -39,11 +39,28 @@ struct dag_node *dag_node_create(struct dag *d, int linenum)
 	n->descendants = set_create(0);
 	n->ancestors = set_create(0);
 
+	n->source_size = -1;
+	n->target_size = -1;
+
+	n->res_nodes = list_create(0);
+	n->wgt_nodes = list_create(0);
+
 	n->ancestor_depth = -1;
 
 	n->resources = make_rmsummary(-1);
 
 	return n;
+}
+
+struct dag_node_size *dag_node_size_create(struct dag_node *n, int64_t size)
+{
+	struct dag_node_size *s;
+
+	s = malloc(sizeof(struct dag_node_size));
+	s->n = n;
+	s->size = size;
+
+	return s;
 }
 
 const char *dag_node_state_name(dag_node_state_t state)
@@ -218,6 +235,138 @@ void dag_node_add_target_file(struct dag_node *n, const char *filename, char *re
 
 	/* register this node as the creator of the file */
 	target->created_by = n;
+}
+
+void dag_node_prepare_node_size(struct dag_node *n)
+{
+	struct dag_file *f;
+	struct dag_node *s;
+	int undef_file = 0;
+	n->source_size = 0;
+	list_first_item(n->source_files);
+	while((f = list_next_item(n->source_files))){
+		if(f->file_size >= 0)
+			n->source_size += f->file_size;
+		else
+			undef_file = 1;
+	}
+	if(undef_file){
+		set_first_element(n->ancestors);
+		while((s = set_next_element(n->ancestors))){
+			if(s->target_size >= 0){
+				n->source_size += s->target_size;
+			} else {
+				n->source_size = -1;
+				return;
+			}
+		}
+	}
+
+	if(n->resources->workdir_footprint > -1)
+		n->target_size = n->resources->workdir_footprint - n->source_size;
+
+	set_first_element(n->descendants);
+	while((s = set_next_element(n->descendants))){
+		dag_node_prepare_node_size(s);
+	}
+}
+
+void dag_node_determine_footprint(struct dag_node *n)
+{
+	int64_t parent_wgt = n->target_size;
+	int64_t children_wgt = n->target_size;
+	int64_t descendant_wgt = 0;
+
+	struct dag_node *d, *e;
+	struct dag_node_size *s, *t;
+
+	set_first_element(n->ancestors);
+	while((d = set_next_element(n->ancestors))){
+		parent_wgt += d->target_size;
+	}
+
+	set_first_element(n->descenedants);
+	while((d = set_next_element(n->descendants))){
+		children_wgt += d->target_size;
+		list_first_item(d->res_nodes);
+		list_first_item(d->wgt_nodes);
+	}
+
+	list_delete(n->res_nodes);
+	list_delete(n->wgt_nodes);
+
+	set_first_element(n->descenedants);
+	if(n->children > 1){
+		int comp = 1;
+		while(comp){
+			d = set_next_element(n->descendants);
+			s = list_next_item(d->res_nodes);
+			while((d = set_next_element(n->descendants))){
+				t = list_next_item(d->res_nodes);
+				if(t->n->nodeid != s->n->nodeid)
+					comp = 0;
+			}
+			
+			set_first_element(n->descenedants);
+			if(comp)
+				list_push_tail(n->res_nodes, s);
+		}
+
+		comp = 1;
+		while(comp){
+			d = set_next_element(n->descendants);
+			s = list_next_item(d->wgt_nodes);
+			while((d = set_next_element(n->descendants))){
+				t = list_next_item(d->wgt_nodes);
+				if(t->n->nodeid != s->n->nodeid)
+					comp = 0;
+			}
+			
+			set_first_element(n->descendants);
+			if(comp)
+				list_push_tail(n->wgt_nodes, s);
+		}
+
+		struct set *tmp = list_duplicate(n->descendants);
+		int64_t node_wgt, max_wgt, tmp_wgt;
+		max_wgt = 0;
+		set_first_element(tmp);
+		while((d = set_next_element(tmp))){
+			s = list_peek_current(d->wgt_nodes)
+			node_wgt = 0;
+			if(s)
+				node_wgt = s->size;
+			while((t = list_next_item(d->wgt_nodes))){
+				if(t->size > node_wgt)
+					node_wgt = t->size;
+			}
+			tmp_wgt = node_wgt;
+			while((e = set_next_element(n->descendants))){
+				if(e->nodeid != d->nodeid && (t = list_peek_current(e->res_nodes)))
+					node_wgt += t->size;
+			}
+			if(max_wgt < tmp_wgt || (max_wgt == tmp_wgt && node_wgt < branch_wgt)){
+				max_wgt = tmp_wgt;
+				branch_wgt = node_wgt;
+			}
+		}
+	} else if(n->children == 1){
+		d = set_next_element(n->descendants);
+		n->res_nodes = list_duplicate(d->res_nodes);
+		n->wgt_nodes = list_duplicate(d->wgt_nodes);
+	} else {
+		n->res_nodes = list_create();
+		n->wgt_nodes = list_create();
+	}
+
+	if(parent_wgt >= children_wgt && parent_wgt >= branch_wgt){
+		
+	} else if(children_wgt >= parent_wgt && children_wgt >= branch_wgt){
+
+	} else {
+
+	}
+
 }
 
 void dag_node_fill_resources(struct dag_node *n)
