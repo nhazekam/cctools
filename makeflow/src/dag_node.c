@@ -262,7 +262,7 @@ void dag_node_prepare_node_size(struct dag_node *n)
 		}
 	}
 
-	if(n->resources->workdir_footprint > -1)
+	if(n->resources->workdir_footprint > -1 )
 		n->target_size = n->resources->workdir_footprint - n->source_size;
 
 	set_first_element(n->descendants);
@@ -273,21 +273,21 @@ void dag_node_prepare_node_size(struct dag_node *n)
 
 void dag_node_determine_footprint(struct dag_node *n)
 {
-	int64_t parent_wgt = n->target_size;
-	int64_t children_wgt = n->target_size;
-	int64_t descendant_wgt = 0;
+	n->parent_wgt = n->target_size;
+	n->children_wgt = n->target_size;
+	n->descendant_wgt = 0;
 
 	struct dag_node *d, *e;
 	struct dag_node_size *s, *t;
 
 	set_first_element(n->ancestors);
 	while((d = set_next_element(n->ancestors))){
-		parent_wgt += d->target_size;
+		n->parent_wgt += d->target_size;
 	}
 
 	set_first_element(n->descenedants);
 	while((d = set_next_element(n->descendants))){
-		children_wgt += d->target_size;
+		n->children_wgt += d->target_size;
 		list_first_item(d->res_nodes);
 		list_first_item(d->wgt_nodes);
 	}
@@ -332,22 +332,33 @@ void dag_node_determine_footprint(struct dag_node *n)
 		max_wgt = 0;
 		set_first_element(tmp);
 		while((d = set_next_element(tmp))){
+			struct list tmp_run = list_create();
 			s = list_peek_current(d->wgt_nodes)
 			node_wgt = 0;
-			if(s)
+			if(s){
 				node_wgt = s->size;
+				list_push_head(n->run_nodes, s);	
+			} else {
+				continue;
+			}
 			while((t = list_next_item(d->wgt_nodes))){
 				if(t->size > node_wgt)
 					node_wgt = t->size;
 			}
 			tmp_wgt = node_wgt;
 			while((e = set_next_element(n->descendants))){
-				if(e->nodeid != d->nodeid && (t = list_peek_current(e->res_nodes)))
+				if(e->nodeid != d->nodeid && (t = list_peek_current(e->res_nodes))){
 					node_wgt += t->size;
+					list_push_head(n->run_nodes, e);	
+				}
 			}
 			if(max_wgt < tmp_wgt || (max_wgt == tmp_wgt && node_wgt < branch_wgt)){
 				max_wgt = tmp_wgt;
-				branch_wgt = node_wgt;
+				n->descendant_wgt = node_wgt;
+				list_delete(n->run_nodes);
+				n->run_nodes = tmp_run;
+			} else {
+				list_delete(tmp_run);
 			}
 		}
 	} else if(n->children == 1){
@@ -359,12 +370,13 @@ void dag_node_determine_footprint(struct dag_node *n)
 		n->wgt_nodes = list_create();
 	}
 
-	if(parent_wgt >= children_wgt && parent_wgt >= branch_wgt){
-		
-	} else if(children_wgt >= parent_wgt && children_wgt >= branch_wgt){
-
+	list_push_tail(n->res_nodes, dag_node_size_create(n, n->output_size));
+	if(parent_wgt >= children_wgt && parent_wgt >= descendant_wgt){
+		list_push_tail(n->wgt_nodes, dag_node_size_create(n, parent_wgt));	
+	} else if(children_wgt >= parent_wgt && children_wgt >= descendant_wgt){
+		list_push_tail(n->wgt_nodes, dag_node_size_create(n, children_wgt));	
 	} else {
-
+		list_push_tail(n->wgt_nodes, dag_node_size_create(n, descendant_wgt));	
 	}
 
 }

@@ -55,8 +55,13 @@ struct dag_node {
 	int64_t source_size;        /* size of dag_files of the node's requirements */
 	int64_t target_size;        /* size of dag_files of the node's productions */
 
+	int64_t parent_wgt;
+	int64_t children_wgt;
+	int64_t descendant_wgt;
+	
 	struct list *res_nodes;
 	struct list *wgt_nodes;
+	struct list *run_nodes;
 
 	struct dag_task_category *category; /* The set of task this node belongs too. Ideally, the makeflow
 										   file labeled which tasks have comparable resource usage. */

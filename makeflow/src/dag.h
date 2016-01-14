@@ -23,6 +23,7 @@ struct dag {
 	/* Static properties of the DAG */
 	char *filename;                     /* Source makeflow file path. */
 	struct dag_node *nodes;             /* Linked list of all production rules, without ordering. */
+	struct list *active_nodes;          /* Linked list of all active production rules, with ordering. */
 	struct itable *node_table;          /* Mapping from unique integers dag_node->nodeid to nodes. */
 	struct hash_table *files;           /* Maps every filename to a struct dag_file. */
 	struct set *inputs;                 /* Set of every struct dag_file specified as input. */

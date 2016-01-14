@@ -341,6 +341,9 @@ static void makeflow_prepare_node_sizes(struct dag *d)
 	}
 	dag_node_prepare_node_size(n);
 	dag_node_determine_footprint(n);
+	while((p, list_next_item(n->run_nodes))){
+		list_push_tail(d->active_nodes, p);
+	}
 }
 
 static void makeflow_prepare_nested_jobs(struct dag *d)
@@ -571,7 +574,7 @@ static int makeflow_node_ready(struct dag *d, struct dag_node *n)
 		}
 	}
 
-	if(!(dag_node_determine_footprint(n) < free_space))
+	if(!makeflow_alloc_check_node_size(alloc, n))
 		return 0;
 
 	return 1;
@@ -585,7 +588,8 @@ static void makeflow_dispatch_ready_jobs(struct dag *d)
 {
 	struct dag_node *n;
 
-	for(n = d->nodes; n; n = n->next) {
+	list_first_item(d->active_nodes);
+	while((n = list_next_item(d->active_nodes))) {
 
 		if(dag_remote_jobs_running(d) >= remote_jobs_max && dag_local_jobs_running(d) >= local_jobs_max)
 			break;
