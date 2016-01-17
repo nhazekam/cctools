@@ -34,6 +34,8 @@ transparently modify the linker namespace we are using.
 #define list_push_priority		cctools_list_push_priority
 #define list_push_head			cctools_list_push_head
 #define list_push_tail			cctools_list_push_tail
+#define list_insert_ahead_current		cctools_list_insert_ahead_current
+#define list_insert_after_current		cctools_list_insert_after_current
 #define list_iterate			cctools_list_iterate
 #define list_iterate_reverse		cctools_list_iterate_reverse
 #define list_first_item			cctools_list_first_item
@@ -162,6 +164,20 @@ void *list_peek_tail(struct list *list);
 @return The item at the list head, or null if list is empty.
 */
 void *list_peek_current(struct list *list);
+
+/** Insert item ahead of current element in the iteration.
+@param list the list to insert in.
+@param item The item that is being inserted.
+@return True on success, false on failure
+*/
+int list_insert_ahead_current(struct list *list, void *item);
+
+/** Insert item after of current element in the iteration.
+@param list the list to insert in.
+@param item The item that is being inserted.
+@return True on success, false on failure
+*/
+int list_insert_after_current(struct list *list, void *item);
 
 /** Find an element within a list
 This function searches the list, comparing each element in the list to arg, and returns a pointer to the first matching element.

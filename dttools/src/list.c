@@ -283,6 +283,42 @@ void *list_peek_current(struct list *l)
 	}
 }
 
+int list_insert_ahead_current(struct list *l, void *item)
+{
+	struct list_node *node;
+
+	if(!l->iter)
+		return list_push_head(l, item);
+
+	node = new_node(item, l->iter->prev, l->iter);
+	if(!node)
+		return 0;
+	if(node->prev == 0)
+		l->head = node;
+	l->iter->prev = node;
+	l->size++;
+
+	return 1;
+}
+
+int list_insert_after_current(struct list *l, void *item)
+{
+	struct list_node *node;
+
+	if(!l->iter)
+		return list_push_tail(l, item);
+
+	node = new_node(item, l->iter, l->iter->next);
+	if(!node)
+		return 0;
+	if(node->next == 0)
+		l->tail = node;
+	l->iter->next = node;
+	l->size++;
+
+	return 1;
+}
+
 void *list_remove(struct list *l, const void *value)
 {
 	struct list_node *n;

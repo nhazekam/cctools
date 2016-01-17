@@ -52,12 +52,12 @@ struct dag_node {
 	struct list   *source_files;        /* list of dag_files of the node's requirements */
 	struct list   *target_files;        /* list of dag_files of the node's productions */
 
-	int64_t source_size;        /* size of dag_files of the node's requirements */
-	int64_t target_size;        /* size of dag_files of the node's productions */
+	uint64_t source_size;        /* size of dag_files of the node's requirements */
+	uint64_t target_size;        /* size of dag_files of the node's productions */
 
-	int64_t parent_wgt;
-	int64_t children_wgt;
-	int64_t descendant_wgt;
+	uint64_t parent_wgt;
+	uint64_t children_wgt;
+	uint64_t descendant_wgt;
 	
 	struct list *res_nodes;
 	struct list *wgt_nodes;
@@ -82,16 +82,18 @@ struct dag_node {
 	int failure_count;                  /* How many times has this rule failed? (see -R and -r) */
 	time_t previous_completion;
 
+	int updated;						/* Express the weight has preiously been updated. */
+
 	struct dag_node *next;              /* The next node in the list of nodes */
 };
 
 struct dag_node_size {
 	struct dag_node *n;
-	int64_t size;
+	uint64_t size;
 };
 
 struct dag_node *dag_node_create(struct dag *d, int linenum);
-struct dag_node_size *dag_node_size_create(struct dag_node *n, int64_t size);
+struct dag_node_size *dag_node_size_create(struct dag_node *n, uint64_t size);
 
 void dag_node_add_source_file(struct dag_node *n, const char *filename, char *remotename);
 void dag_node_add_target_file(struct dag_node *n, const char *filename, char *remotename);

@@ -38,7 +38,8 @@ struct dag_file {
 	struct list     *needed_by;		/* List of nodes that have this file as a source */
 	struct dag_node *created_by;	/* The node (if any) that created the file */
 	int    ref_count;				/* How many nodes still to run need this file */
-	int64_t file_size;				/* File size used for calculating node size */
+	uint64_t file_size;				/* File size used for calculating node size */
+	uint64_t est_size;				/* Estimated file size used for calculating node size */
 	time_t creation_logged;			/* Time that file creation is logged */
 	dag_file_state_t state;			/* Enum: DAG_FILE_STATE_{INTIAL,EXPECT,...} */
 	dag_file_type_t type;			/* Enum: DAG_FILE_TYPE_{INPUT,...} */

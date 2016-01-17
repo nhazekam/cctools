@@ -8,36 +8,31 @@ See the file COPYING for details.
 #ifndef MAKEFLOW_ALLOC_H
 #define MAKEFLOW_ALLOC_H
 
+#include "dag_node.h"
+
 /*
 This module implements resource allocations.
 */
 
 struct makeflow_alloc_unit {
 	uint64_t total;
-	uint64_t committed;
-	uint64_t used;
+	uint64_t commit;
+	uint64_t free;
 };
 
 struct makeflow_alloc {
-	struct makeflow_alloc_unit *cores;
-	struct makeflow_alloc_unit *disk;
-	struct makeflow_alloc_unit *memory;
+	int nodeid;
+	struct makeflow_alloc_unit *storage;
+	struct makeflow_alloc *parent;
+	struct list *residuals;
+	int locked;
 };
 
-struct makeflow_alloc * makeflow_alloc_create();
-struct makeflow_alloc_unit * makeflow_alloc_unit_create();
+struct makeflow_alloc * makeflow_alloc_create(int nodeid, struct makeflow_alloc *parent, uint64_t size, int locked);
 
-int makeflow_alloc_commit	( struct makeflow_alloc *a, uint64_t core_est, 
-								uint64_t disk_est, uint64_t memory_est);
-int makeflow_alloc_use		( struct makeflow_alloc *a, uint64_t core_est, 
-								uint64_t core_use, uint64_t disk_est, 
-								uint64_t disk_use, uint64_t memory_est, 
-								uint64_t memory_use);
-int makeflow_alloc_free		( struct makeflow_alloc *a, uint64_t core_u, 
-								uint64_t disk_u, uint64_t memory_u);
+void makeflow_alloc_print( struct makeflow_alloc *a, struct dag_node *n);
 
-int makeflow_alloc_unit_commit( struct makeflow_alloc_unit *unit, uint64_t estimated );
-int makeflow_alloc_unit_use   ( struct makeflow_alloc_unit *unit, uint64_t estimated, uint64_t used );
-int makeflow_alloc_unit_free  ( struct makeflow_alloc_unit *unit, uint64_t free );
-
+int makeflow_alloc_check_node_size( struct makeflow_alloc *a, struct dag_node *n);
+int makeflow_alloc_commit_space( struct makeflow_alloc *a, struct dag_node *n);
+int makeflow_alloc_release_space( struct makeflow_alloc *a, struct dag_node *n, uint64_t size, int free);
 #endif

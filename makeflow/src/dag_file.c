@@ -12,12 +12,16 @@ See the file COPYING for details.
 
 #include <stdlib.h>
 
+#define MAKEFLOW_DEFAULT_FILE_SIZE 1024
+////*1024*1024
+
 struct dag_file * dag_file_create( const char *filename )
 {
 	struct dag_file *f = malloc(sizeof(*f));
 	f->filename = xxstrdup(filename);
 	f->needed_by = list_create();
-	f->file_size = -1;
+	f->file_size = 0;
+	f->est_size = MAKEFLOW_DEFAULT_FILE_SIZE;
 	f->created_by = 0;
 	f->ref_count = 0;
 	f->state = DAG_FILE_STATE_UNKNOWN;

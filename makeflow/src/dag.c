@@ -30,6 +30,7 @@ struct dag *dag_create()
 
 	memset(d, 0, sizeof(*d));
 	d->nodes = 0;
+	d->active_nodes = list_create();
 	d->filename = NULL;
 	d->node_table = itable_create(0);
 	d->local_job_table = itable_create(0);
