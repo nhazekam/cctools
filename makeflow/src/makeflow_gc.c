@@ -150,7 +150,7 @@ int makeflow_clean_file( struct dag *d, struct batch_queue *queue, struct dag_fi
 		debug(D_MAKEFLOW_RUN, "File deleted %s\n", f->filename);
 		makeflow_log_file_state_change(d, f, DAG_FILE_STATE_DELETE);
 		makeflow_alloc_release_space(alloc, f->created_by, f->file_size, 1);
-		makeflow_alloc_print(alloc, f->created_by);
+//		makeflow_alloc_print(alloc, f->created_by);
 
 		if(!silent)
 			debug(D_NOTICE, "Makeflow: Deleted path %s\n", f->filename);

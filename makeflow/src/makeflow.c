@@ -300,6 +300,7 @@ void makeflow_node_force_rerun(struct itable *rerun_table, struct dag *d, struct
 	makeflow_log_state_change(d, n, DAG_NODE_STATE_WAITING);
 
 	// For each parent node, rerun it if input file was garbage collected
+	int parents_run = 0;
 	list_first_item(n->source_files);
 	while((f1 = list_next_item(n->source_files))) {
 		if(dag_file_should_exist(f1))
@@ -308,9 +309,14 @@ void makeflow_node_force_rerun(struct itable *rerun_table, struct dag *d, struct
 		p = f1->created_by;
 		if(p) {
 			makeflow_node_force_rerun(rerun_table, d, p);
+			parents_run = 1;
 			f1->ref_count += 1;
 		}
 	}
+
+	// This may need to be revisited inorder to get the ordering of adding nodes correct again
+	if(!parents_run && !n->active)
+		list_push_tail(d->active_nodes, n);
 
 	// For each child node, rerun it
 	list_first_item(n->target_files);
@@ -349,6 +355,7 @@ static void makeflow_prepare_node_sizes(struct dag *d)
 	list_first_item(n->run_nodes);
 	while((p = list_next_item(n->run_nodes))){
 		list_push_tail(d->active_nodes, p);
+		p->active = 1;
 	}
 }
 
@@ -492,7 +499,7 @@ static void makeflow_node_submit(struct dag *d, struct dag_node *n)
 	}
 
 	makeflow_alloc_commit_space(storage_allocation, n);
-	makeflow_alloc_print(storage_allocation, n);
+//	makeflow_alloc_print(storage_allocation, n);
 
 	struct list *input_list  = makeflow_generate_input_files(n, wrapper, monitor);
 	struct list *output_list = makeflow_generate_output_files(n, wrapper, monitor);
@@ -564,15 +571,24 @@ static int makeflow_node_ready(struct dag *d, struct dag_node *n)
 {
 	struct dag_file *f;
 
-	if(n->state != DAG_NODE_STATE_WAITING)
+	
+	if(n->state == DAG_NODE_STATE_COMPLETE){
+		list_remove(d->active_nodes, n);
 		return 0;
+	}
+
+	if(n->state != DAG_NODE_STATE_WAITING){
+		return 0;
+	}
 
 	if(n->local_job && local_queue) {
-		if(dag_local_jobs_running(d) >= local_jobs_max)
+		if(dag_local_jobs_running(d) >= local_jobs_max){
 			return 0;
+		}
 	} else {
-		if(dag_remote_jobs_running(d) >= remote_jobs_max)
+		if(dag_remote_jobs_running(d) >= remote_jobs_max){
 			return 0;
+		}
 	}
 
 	list_first_item(n->source_files);
@@ -584,9 +600,9 @@ static int makeflow_node_ready(struct dag *d, struct dag_node *n)
 		}
 	}
 
-	if(!makeflow_alloc_check_node_size(storage_allocation, n))
+	if(!makeflow_alloc_check_node_size(storage_allocation, n)){
 		return 0;
-
+	}
 
 	return 1;
 }
@@ -745,22 +761,30 @@ static void makeflow_node_complete(struct dag *d, struct dag_node *n, struct bat
 		}
 		struct dag_node *p;
 
+		dag_node_prepare_node_size(n);
+		dag_node_determine_footprint(n);
+
 		list_first_item(d->active_nodes);
 		while((p = list_next_item(d->active_nodes))){
-			if(p == n)
+			if(p->nodeid == n->nodeid)
 				break;
 		}
 
-
-		set_first_element(n->descendants);
-		while((p = set_next_element(n->descendants))){
-			list_insert_ahead_current(d->active_nodes, p);
+		list_first_item(n->run_nodes);
+		while((p = list_next_item(n->run_nodes))){
+			if(!p->active){
+				list_insert_ahead_current(d->active_nodes, p);
+				p->active = 1;
+			}
 		}
-		list_remove(d->active_nodes, n);
+
+		list_first_item(d->active_nodes);
+		p = list_remove(d->active_nodes, n);
+		p->active = 0;
+
 		struct dag_node_size *wgt = list_peek_tail(n->wgt_nodes);
-		struct dag_node_size *res = list_peek_tail(n->res_nodes);
-		makeflow_alloc_release_space(storage_allocation, n, wgt->size-(wgt->size-res->size),0);
-		makeflow_alloc_print(storage_allocation, n);
+		makeflow_alloc_release_space(storage_allocation, n, wgt->size-n->target_size,0);
+//		makeflow_alloc_print(storage_allocation, n);
 		makeflow_log_state_change(d, n, DAG_NODE_STATE_COMPLETE);
 	}
 }
@@ -851,7 +875,7 @@ static void makeflow_run( struct dag *d )
 	while(!makeflow_abort_flag) {
 		makeflow_dispatch_ready_jobs(d);
 
-		if(dag_local_jobs_running(d)==0 && dag_remote_jobs_running(d)==0 && !list_size(d->active_nodes))
+		if(dag_local_jobs_running(d)==0 && dag_remote_jobs_running(d)==0 && list_size(d->active_nodes)==0)
 			break;
 
 		if(dag_remote_jobs_running(d)) {
@@ -890,7 +914,7 @@ static void makeflow_run( struct dag *d )
 		 * wait loop, perform garbage collection after a proportional
 		 * amount of tasks have passed. */
 		makeflow_gc_barrier--;
-		if(makeflow_gc_method != MAKEFLOW_GC_NONE){ // && (makeflow_gc_barrier == 0 || !list_size(d->active_nodes))) {
+		if(makeflow_gc_method != MAKEFLOW_GC_NONE && (makeflow_gc_barrier == 0 || !list_size(d->active_nodes))) {
 			makeflow_gc(d, remote_queue, makeflow_gc_method, makeflow_gc_size, makeflow_gc_count, storage_allocation);
 			makeflow_gc_barrier = MAX(d->nodeid_counter * makeflow_gc_task_ratio, 1);
 		}

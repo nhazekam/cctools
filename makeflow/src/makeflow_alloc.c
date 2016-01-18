@@ -42,6 +42,7 @@ int makeflow_alloc_viable_space( struct makeflow_alloc *a, struct dag_node *n)
 		return 0;
 
 	struct makeflow_alloc *alloc1, *alloc2;
+	list_first_item(n->res_nodes);
 	struct dag_node_size *node = list_next_item(n->res_nodes);
 	uint64_t space;
 	if(!node)
@@ -71,16 +72,12 @@ int makeflow_alloc_res_accounted( struct makeflow_alloc *a, struct dag_node *n)
 	struct makeflow_alloc *alloc1, *alloc2;
 
 	alloc1 = a;
-	printf("Residual for %d : %d : %d.\n",n->nodeid, node->n->nodeid, alloc1->nodeid);
-	printf("\n\t%d", alloc1->nodeid);
 	list_first_item(alloc1->residuals);
 	while(node && (alloc2 = list_next_item(alloc1->residuals))){
-		printf("\t%d", alloc2->nodeid);
 		if(n->nodeid == alloc2->nodeid)
 			break;
 		if(alloc2->nodeid == node->n->nodeid){
 			alloc1 = alloc2;
-			printf("\n\t%d", list_size(alloc1->residuals));
 			list_first_item(alloc1->residuals);
 			node = list_next_item(n->wgt_nodes);
 			continue;
@@ -101,20 +98,17 @@ int makeflow_alloc_res_accounted( struct makeflow_alloc *a, struct dag_node *n)
 int makeflow_alloc_check_node_size( struct makeflow_alloc *a, struct dag_node *n)
 {
 	if(!a->locked){
-		printf("Base allocation has no limit.\n");
 		return 1;
 	}
 
 	uint64_t result = makeflow_alloc_viable_space(a, n);
 	struct dag_node_size *node_size = list_peek_tail(n->wgt_nodes);
 	if(result >= node_size->size){
-		printf("Even space in general.\n");
 		return 1;
 	}
 
 	int res_accounted = makeflow_alloc_res_accounted(a, n);
 	if(res_accounted && (result >= n->target_size)){
-		printf("Residual is allocatd.\n");
 		return 1;
 	}
 	return 0;
@@ -123,7 +117,7 @@ int makeflow_alloc_check_node_size( struct makeflow_alloc *a, struct dag_node *n
 
 int makeflow_alloc_shrink_alloc( struct makeflow_alloc *a, uint64_t dec, int free)
 {
-	if(!a) // Case that we are at parent and we will now try to grow
+	if(!a)
 		return 0;
 
 	a->storage->total    -= dec;
@@ -172,7 +166,6 @@ int makeflow_alloc_commit_space( struct makeflow_alloc *a, struct dag_node *n)
 	list_first_item(n->wgt_nodes);
 	list_first_item(n->wgt_nodes);
 	node = list_peek_tail(n->wgt_nodes);
-	printf("Committing\t%" PRIu64 "\t from %d\n", node->size, n->nodeid);
 	while((node = list_peek_current(n->wgt_nodes))){
 		tmp = NULL;
 		list_first_item(alloc1->residuals);
@@ -236,7 +229,6 @@ void makeflow_alloc_print( struct makeflow_alloc *a, struct dag_node *n)
 
 int makeflow_alloc_release_space( struct makeflow_alloc *a, struct dag_node *n, uint64_t size, int free)
 {
-	printf("Releasing\t%" PRIu64 "\t from %d\n", size, n->nodeid);
 	struct dag_node_size *node;
 	struct makeflow_alloc *alloc1, *alloc2, *tmp;
 

@@ -83,6 +83,7 @@ struct dag_node {
 	time_t previous_completion;
 
 	int updated;						/* Express the weight has preiously been updated. */
+	int active;						/* Express the weight has preiously been updated. */
 
 	struct dag_node *next;              /* The next node in the list of nodes */
 };

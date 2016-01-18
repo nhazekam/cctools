@@ -30,8 +30,8 @@ struct dag_node *dag_node_create(struct dag *d, int linenum)
 	n->nodeid = d->nodeid_counter++;
 	n->variables = hash_table_create(0, 0);
 
-	n->source_files = list_create(0);
-	n->target_files = list_create(0);
+	n->source_files = list_create();
+	n->target_files = list_create();
 
 	n->remote_names = itable_create(0);
 	n->remote_names_inv = hash_table_create(0, 0);
@@ -42,10 +42,11 @@ struct dag_node *dag_node_create(struct dag *d, int linenum)
 	n->source_size = -1;
 	n->target_size = -1;
 
-	n->res_nodes = list_create(0);
-	n->wgt_nodes = list_create(0);
-	n->run_nodes = list_create(0);
+	n->res_nodes = list_create();
+	n->wgt_nodes = list_create();
+	n->run_nodes = list_create();
 	n->updated = 0;
+	n->active = 0;
 
 	n->ancestor_depth = -1;
 
@@ -275,7 +276,7 @@ void dag_node_determine_footprint(struct dag_node *n)
 	struct dag_file *f;
 	struct dag_node *d, *e;
 	struct dag_node_size *s, *t;
-	struct set *tmp = set_create(set_size(n->descendants));
+	struct set *tmp = set_create(0);
 
 	set_first_element(n->ancestors);
 	while((d = set_next_element(n->ancestors))){
@@ -310,12 +311,14 @@ void dag_node_determine_footprint(struct dag_node *n)
 
 	list_delete(n->res_nodes);
 	list_delete(n->wgt_nodes);
+	list_delete(n->run_nodes);
 
 
 	set_first_element(n->descendants);
 	if(set_size(n->descendants) > 1){
 		n->res_nodes = list_create();
 		n->wgt_nodes = list_create();
+		n->run_nodes = list_create();
 		set_first_element(n->descendants);
 
 		int comp = 1;
@@ -357,7 +360,7 @@ void dag_node_determine_footprint(struct dag_node *n)
 			node_wgt = 0;
 			if(s){
 				node_wgt = s->size;
-				list_push_head(n->run_nodes, s);	
+				list_push_head(tmp_run, d);	
 			} else {
 				continue;
 			}
@@ -368,23 +371,25 @@ void dag_node_determine_footprint(struct dag_node *n)
 			tmp_wgt = node_wgt;
 			set_first_element(n->descendants);
 			while((e = set_next_element(n->descendants))){
-				if(e->nodeid != d->nodeid && (t = list_peek_current(e->res_nodes))){
+				t = list_peek_current(e->res_nodes);
+				if(e->nodeid != d->nodeid){
 					node_wgt += t->size;
-					list_push_head(n->run_nodes, e);	
+					list_push_head(tmp_run, e);	
 				}
 			}
 			if(max_wgt < tmp_wgt || (max_wgt == tmp_wgt && node_wgt < n->descendant_wgt)){
 				max_wgt = tmp_wgt;
 				n->descendant_wgt = node_wgt;
 				list_delete(n->run_nodes);
-				n->run_nodes = tmp_run;
-			} else {
-				list_delete(tmp_run);
-			}
+				n->run_nodes = list_duplicate(tmp_run);
+			} 
+			list_delete(tmp_run);	
 		}
 	} else if(set_size(n->descendants) == 1){
 		d = set_next_element(n->descendants);
+		n->run_nodes = list_create();
 		list_push_tail(n->run_nodes, d);
+
 		s = list_peek_tail(d->wgt_nodes);
 		n->descendant_wgt = s->size;
 		n->res_nodes = list_duplicate(d->res_nodes);
@@ -392,12 +397,11 @@ void dag_node_determine_footprint(struct dag_node *n)
 	} else {
 		n->res_nodes = list_create();
 		n->wgt_nodes = list_create();
+		n->run_nodes = list_create();
 	}
-	printf("Parent weight for %d : %" PRIu64"\n", n->nodeid, n->parent_wgt);
-	printf("Child weight for %d : %" PRIu64"\n", n->nodeid, n->children_wgt);
-	printf("Desc weight for %d : %" PRIu64"\n", n->nodeid, n->descendant_wgt);
 
 	list_push_tail(n->res_nodes, dag_node_size_create(n, n->target_size));
+
 	if((n->parent_wgt >= n->children_wgt) && (n->parent_wgt >= n->descendant_wgt)){
 		list_push_tail(n->wgt_nodes, dag_node_size_create(n, n->parent_wgt));	
 	} else if((n->children_wgt >= n->parent_wgt) && (n->children_wgt >= n->descendant_wgt)){
@@ -406,11 +410,21 @@ void dag_node_determine_footprint(struct dag_node *n)
 		list_push_tail(n->wgt_nodes, dag_node_size_create(n, n->descendant_wgt));	
 	}
 
+/*		USED FOR CHECKING EXPECTED SIZES
+	list_first_item(n->run_nodes);
+	while((d = list_next_item(n->run_nodes)))
+		printf("%d\t", d->nodeid);
+	printf("\n");
+	printf("Parent weight for %d : %" PRIu64"\n", n->nodeid, n->parent_wgt);
+	printf("Child weight for %d : %" PRIu64"\n", n->nodeid, n->children_wgt);
+	printf("Desc weight for %d : %" PRIu64"\n", n->nodeid, n->descendant_wgt);
+
 	list_first_item(n->wgt_nodes);
 	while((s = list_next_item(n->wgt_nodes))){
 		printf("(%d, %"PRIu64") ", s->n->nodeid, s->size);
 	}
 	printf("\n");
+*/
 	n->updated = 1;
 }
 
