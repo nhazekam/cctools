@@ -293,8 +293,10 @@ int list_insert_ahead_current(struct list *l, void *item)
 	node = new_node(item, l->iter->prev, l->iter);
 	if(!node)
 		return 0;
-	if(node->prev == 0)
+	if(node->prev == NULL)
 		l->head = node;
+	else
+		l->iter->prev->next = node;
 	l->iter->prev = node;
 	l->size++;
 
@@ -311,8 +313,10 @@ int list_insert_after_current(struct list *l, void *item)
 	node = new_node(item, l->iter, l->iter->next);
 	if(!node)
 		return 0;
-	if(node->next == 0)
+	if(node->next == NULL)
 		l->tail = node;
+	else
+		l->iter->next->prev = node;
 	l->iter->next = node;
 	l->size++;
 

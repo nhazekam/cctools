@@ -28,6 +28,7 @@ See the file COPYING for details.
 #include "jx.h"
 
 #include "dag.h"
+#include "dag_node.h"
 #include "dag_visitors.h"
 #include "makeflow_summary.h"
 #include "makeflow_alloc.h"
@@ -162,7 +163,6 @@ static struct list *makeflow_generate_output_files( struct dag_node *n, struct m
 
 	return result;
 }
-
 /*
 Abort the dag by removing all batch jobs from all queues.
 */
@@ -315,7 +315,7 @@ void makeflow_node_force_rerun(struct itable *rerun_table, struct dag *d, struct
 	}
 
 	// This may need to be revisited inorder to get the ordering of adding nodes correct again
-	if(!parents_run && !n->active)
+	if(!parents_run && !list_find(d->active_nodes, (int (*)(void *,const void *)) dag_node_comp , n))
 		list_push_tail(d->active_nodes, n);
 
 	// For each child node, rerun it
@@ -355,7 +355,6 @@ static void makeflow_prepare_node_sizes(struct dag *d)
 	list_first_item(n->run_nodes);
 	while((p = list_next_item(n->run_nodes))){
 		list_push_tail(d->active_nodes, p);
-		p->active = 1;
 	}
 }
 
@@ -499,6 +498,7 @@ static void makeflow_node_submit(struct dag *d, struct dag_node *n)
 	}
 
 	makeflow_alloc_commit_space(storage_allocation, n);
+	makeflow_log_alloc_state_change(d, storage_allocation);
 //	makeflow_alloc_print(storage_allocation, n);
 
 	struct list *input_list  = makeflow_generate_input_files(n, wrapper, monitor);
@@ -556,6 +556,7 @@ static void makeflow_node_submit(struct dag *d, struct dag_node *n)
 		}
 	} else {
 		makeflow_log_state_change(d, n, DAG_NODE_STATE_FAILED);
+		list_remove(d->active_nodes, n);
 		makeflow_failed_flag = 1;
 	}
 
@@ -735,12 +736,14 @@ static void makeflow_node_complete(struct dag *d, struct dag_node *n, struct bat
 			free(log_name_prefix);
 			free(summary_name);
 
+			list_remove(d->active_nodes, n);
 			makeflow_failed_flag = 1;
 		}
 		else if(makeflow_retry_flag || info->exit_code == 101) {
 			n->failure_count++;
 			if(n->failure_count > makeflow_retry_max) {
 				fprintf(stderr, "job %s failed too many times.\n", n->command);
+				list_remove(d->active_nodes, n);
 				makeflow_failed_flag = 1;
 			} else {
 				fprintf(stderr, "will retry failed job %s\n", n->command);
@@ -749,20 +752,22 @@ static void makeflow_node_complete(struct dag *d, struct dag_node *n, struct bat
 		}
 		else
 		{
+			list_remove(d->active_nodes, n);
 			makeflow_failed_flag = 1;
 		}
 	} else {
 		/* Mark source files that have been used by this node */
 		list_first_item(n->source_files);
 		while((f = list_next_item(n->source_files))){
-			f->ref_count+= -1;
+			f->ref_count -= 1;
 			if(f->ref_count == 0 && f->state == DAG_FILE_STATE_EXISTS)
 				makeflow_log_file_state_change(d, f, DAG_FILE_STATE_COMPLETE);
 		}
+		
 		struct dag_node *p;
 
-		dag_node_prepare_node_size(n);
-		dag_node_determine_footprint(n);
+//		dag_node_prepare_node_size(n);
+//		dag_node_determine_footprint(n);
 
 		list_first_item(d->active_nodes);
 		while((p = list_next_item(d->active_nodes))){
@@ -772,18 +777,19 @@ static void makeflow_node_complete(struct dag *d, struct dag_node *n, struct bat
 
 		list_first_item(n->run_nodes);
 		while((p = list_next_item(n->run_nodes))){
-			if(!p->active){
-				list_insert_ahead_current(d->active_nodes, p);
-				p->active = 1;
+			printf("Viewing %d\t", p->nodeid);
+			if(!list_find(d->active_nodes, (int (*)(void *,const void *)) dag_node_comp, p)){
+				printf("Adding %d\t", p->nodeid);
+				list_push_head(d->active_nodes, p);
 			}
 		}
 
 		list_first_item(d->active_nodes);
 		p = list_remove(d->active_nodes, n);
-		p->active = 0;
 
 		struct dag_node_size *wgt = list_peek_tail(n->wgt_nodes);
 		makeflow_alloc_release_space(storage_allocation, n, wgt->size-n->target_size,0);
+		makeflow_log_alloc_state_change(d, storage_allocation);
 //		makeflow_alloc_print(storage_allocation, n);
 		makeflow_log_state_change(d, n, DAG_NODE_STATE_COMPLETE);
 	}

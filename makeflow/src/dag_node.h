@@ -96,6 +96,8 @@ struct dag_node_size {
 struct dag_node *dag_node_create(struct dag *d, int linenum);
 struct dag_node_size *dag_node_size_create(struct dag_node *n, uint64_t size);
 
+int dag_node_comp(void *item, const void *arg);
+
 void dag_node_add_source_file(struct dag_node *n, const char *filename, char *remotename);
 void dag_node_add_target_file(struct dag_node *n, const char *filename, char *remotename);
 

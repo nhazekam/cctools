@@ -238,6 +238,13 @@ static int dag_parse_process_special_variable(struct lexer *bk, struct dag_node 
 		}
 		else
 			bk->category = category;
+	} else if(strcmp("FILESIZE", name) == 0) {
+		const char *file = dag_variable_lookup_global_string("FILE", d);
+		struct dag_file *f;
+		if(file)
+			f = dag_file_lookup_or_create(d, file);
+		if(f)
+			f->est_size = string_metric_parse(value);
 	}
 	/* else if some other special variable .... */
 	/* ... */

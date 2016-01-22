@@ -149,12 +149,20 @@ void makeflow_log_file_state_change( struct dag *d, struct dag_file *f, int news
 	f->state = newstate;
 
 	timestamp_t time = timestamp_get();
-	fprintf(d->logfile, "# %d %s %" PRIu64 "\n", f->state, f->filename, time);
+	fprintf(d->logfile, "# file %d %s %" PRIu64 "\n", f->state, f->filename, time);
 	if(f->state == DAG_FILE_STATE_EXISTS){
 		d->completed_files += 1;
 	} else if(f->state == DAG_FILE_STATE_DELETE) {
 		d->deleted_files += 1;
 	}
+	makeflow_log_sync(d,0);
+}
+
+void makeflow_log_alloc_state_change( struct dag *d, struct makeflow_alloc *a )
+{
+	debug(D_MAKEFLOW_RUN, "alloc %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64"\n", a->storage->total, a->storage->commit, a->storage->free, d->total_file_size);
+
+	fprintf(d->logfile, "# alloc %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64"\n", a->storage->total, a->storage->commit, a->storage->free, d->total_file_size);
 	makeflow_log_sync(d,0);
 }
 
@@ -187,7 +195,7 @@ void makeflow_log_recover(struct dag *d, const char *filename, int verbose_mode,
 		while((line = get_line(d->logfile))) {
 			linenum++;
 
-			if(sscanf(line, "# %d %s %" SCNu64 "", &file_state, file, &previous_completion_time) == 3) {
+			if(sscanf(line, "# file %d %s %" SCNu64 "", &file_state, file, &previous_completion_time) == 3) {
 
 				f = dag_file_lookup_or_create(d, file);
 				f->state = file_state;
