@@ -769,20 +769,31 @@ static void makeflow_node_complete(struct dag *d, struct dag_node *n, struct bat
 //		dag_node_prepare_node_size(n);
 //		dag_node_determine_footprint(n);
 
+		printf("\nActive List\t");
 		list_first_item(d->active_nodes);
 		while((p = list_next_item(d->active_nodes))){
-			if(p->nodeid == n->nodeid)
+			if(p->nodeid == n->nodeid){
+				printf("%d\t", p->nodeid);
 				break;
+			}
 		}
+		printf("\n");
 
 		list_first_item(n->run_nodes);
 		while((p = list_next_item(n->run_nodes))){
 			printf("Viewing %d\t", p->nodeid);
 			if(!list_find(d->active_nodes, (int (*)(void *,const void *)) dag_node_comp, p)){
 				printf("Adding %d\t", p->nodeid);
-				list_push_head(d->active_nodes, p);
+				list_insert_before_current(d->active_nodes, p);
 			}
 		}
+
+		printf("\nRunning List\t");
+		list_first_item(d->active_nodes);
+		while((p = list_next_item(d->active_nodes))){
+			printf("%d\t", p->nodeid);
+		}
+		printf("\n");
 
 		list_first_item(d->active_nodes);
 		p = list_remove(d->active_nodes, n);

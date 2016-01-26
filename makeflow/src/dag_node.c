@@ -362,34 +362,31 @@ void dag_node_determine_footprint(struct dag_node *n)
 				list_push_tail(n->wgt_nodes, s);
 		}
 
-		uint64_t node_wgt, max_wgt, tmp_wgt;
+		uint64_t node_wgt, max_wgt, tmp_wgt, res_size;
 		max_wgt = 0;
 		set_first_element(tmp);
 		while((d = set_next_element(tmp))){
 			struct list *tmp_run = list_create();
-			s = list_peek_current(d->wgt_nodes);
-			node_wgt = 0;
-			if(s){
-				node_wgt = s->size;
-				list_push_head(tmp_run, d);	
-			} else if((s= list_peek_tail(d->wgt_nodes))) {
-				node_wgt = s->size;
-				list_push_head(tmp_run, d);	
-			} else { 
-				continue;
-			}
-			while((t = list_next_item(d->wgt_nodes))){
+			node_wgt = d->parent_wgt;
+			if(d->parent_wgt <= d->children_wgt)
+				node_wgt = d->children_wgt;
+			list_push_head(tmp_run, d);	
+
+			while((t = list_peek_current(d->wgt_nodes))){
 				if(t->size > node_wgt)
 					node_wgt = t->size;
+				list_next_item(d->wgt_nodes);
 			}
 			tmp_wgt = node_wgt;
 			set_first_element(n->descendants);
 			while((e = set_next_element(n->descendants))){
 				t = list_peek_current(e->res_nodes);
 				if(!t)
-					t = list_peek_tail(e->res_nodes);
+					res_size = e->target_size;
+				else
+					res_size = t->size;
 				if(e->nodeid != d->nodeid){
-					node_wgt += t->size;
+					node_wgt += res_size;
 					list_push_head(tmp_run, e);	
 				}
 			}

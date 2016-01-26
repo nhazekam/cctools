@@ -170,7 +170,7 @@ void *list_peek_current(struct list *list);
 @param item The item that is being inserted.
 @return True on success, false on failure
 */
-int list_insert_ahead_current(struct list *list, void *item);
+int list_insert_before_current(struct list *list, void *item);
 
 /** Insert item after of current element in the iteration.
 @param list the list to insert in.
