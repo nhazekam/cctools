@@ -245,12 +245,16 @@ do
 		--debug)
 			optdebug=1
 			optstrict=1
+			optsanitize=1
 			;;
 		--prefix)
 			install_path=$(abspath "${arg}")
 			;;
 		--strict)
 			optstrict=1
+			;;
+		--sanitize)
+			optsanitize=1
 			;;
 		--sge-parameter)
 			if [ -z "$sge_parameters" ]
@@ -424,6 +428,10 @@ done
 
 if [ "$optstrict" = 1 ]; then
 	ccflags="${ccflags} -Werror"
+fi
+
+if [ "$optsanitize" = 1 ]; then
+	ccflags="${ccflags} -fsanitize=address -fno-omit-frame-pointer"
 fi
 
 potential_packages="dttools batch_job ${include_package_makeflow} work_queue ${include_package_apps} ${include_package_sand} ${include_package_allpairs} ${include_package_wavefront} ${include_package_ftplite} ${include_package_parrot} ${include_package_resource_monitor} ${include_package_chirp} ${include_package_weaver} ${include_package_umbrella} ${include_package_deltadb} ${include_package_prune} ${include_package_doc}"
