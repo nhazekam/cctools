@@ -48,7 +48,7 @@ def parse_bwa_options(parser):
 	group.add_option('--query', dest='fastq', help='The (forward) fastq file to use for the mapping')
 	group.add_option('--rquery', dest='rfastq', help='The reverse fastq file to use for mapping if paired-end data')
 	group.add_option('--output_SAM', dest='output_SAM', help='The file to save the output (SAM format) [FASTQ.sam]')
-	group.add_option('--output_err', dest='output_err', help='The file to save the output (SAM format) [FASTQ.err]')
+	group.add_option('--output_err', dest='output_err', help='The file to save run errors (TXT format) [FASTQ.err]')
 	group.add_option('--algo', dest='algo', help='The type of Alignment Algorithm (backtrack, bwasw, mem) [mem]')
 	parser.add_option_group(group)
 
@@ -316,7 +316,7 @@ def write_makeflow(destination, configuration, num_reads_per_split, fastq_name, 
 					if bwa_args["samse"]:
 						se_a = ' '.join(bwa_args["samse"])
 
-					makeflow.write("\n\n {0} {1} : bwa {2} {3} {4}".format(output, error, index, query1, sai1))
+					makeflow.write("\n\n{0} {1} : bwa {2} {3} {4}".format(output, error, index, query1, sai1))
 					makeflow.write("\n\t./bwa samse {0} {1} {2} {3} > {4} 2> {5}".format(se_a, ref, sai1, query1, output, error))
 
 			else:
