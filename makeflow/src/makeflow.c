@@ -1281,6 +1281,8 @@ int main(int argc, char *argv[])
 		LONG_OPT_MESOS_PRELOAD,
 		LONG_OPT_SEND_ENVIRONMENT,
 		LONG_OPT_K8S_IMG,
+	};
+
 	static const struct option long_options_run[] = {
 		{"advertise", no_argument, 0, 'a'},
 		{"allocation", required_argument, 0, LONG_OPT_ALLOCATION_MODE},
