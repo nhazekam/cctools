@@ -1580,23 +1580,23 @@ int main(int argc, char *argv[])
 				explicit_local_disk = atoi(optarg);
 				break;
 			case LONG_OPT_MONITOR:
-				makeflow_hook_register(&makeflow_hook_resource_monitor);
+				makeflow_hook_register(&makeflow_hook_resource_monitor, &hook_args);
 				jx_insert(hook_args, jx_string("resource_monitor_log_dir"), jx_string(optarg));
 				break;
 			case LONG_OPT_MONITOR_INTERVAL:
-				makeflow_hook_register(&makeflow_hook_resource_monitor);
+				makeflow_hook_register(&makeflow_hook_resource_monitor, &hook_args);
 				jx_insert(hook_args, jx_string("resource_monitor_interval"), jx_integer(atoi(optarg)));
 				break;
 			case LONG_OPT_MONITOR_TIME_SERIES:
-				makeflow_hook_register(&makeflow_hook_resource_monitor);
+				makeflow_hook_register(&makeflow_hook_resource_monitor, &hook_args);
 				jx_insert(hook_args, jx_string("resource_monitor_enable_time_series"), jx_integer(1));
 				break;
 			case LONG_OPT_MONITOR_OPENED_FILES:
-				makeflow_hook_register(&makeflow_hook_resource_monitor);
+				makeflow_hook_register(&makeflow_hook_resource_monitor, &hook_args);
 				jx_insert(hook_args, jx_string("resource_monitor_enable_list_files"), jx_integer(1));
 				break;
 			case LONG_OPT_MONITOR_LOG_NAME:
-				makeflow_hook_register(&makeflow_hook_resource_monitor);
+				makeflow_hook_register(&makeflow_hook_resource_monitor, &hook_args);
 				jx_insert(hook_args, jx_string("resource_monitor_log_format"), jx_string(optarg));
 				break;
 			case LONG_OPT_CACHE:
