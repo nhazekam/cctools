@@ -337,7 +337,6 @@ static int node_end(void * instance_struct, struct dag_node *n, struct batch_tas
 static int node_fail(void * instance_struct, struct dag_node *n, struct batch_task *task)
 {
 	int rc = MAKEFLOW_HOOK_FAILURE;
-	debug(D_MAKEFLOW_HOOK, "Entered failed resource monitor");
 	/* Currently checking the case where either rm ran out of disk or it caught an overflow. Slightly redundant. */
 	if ((task->info->disk_allocation_exhausted) || (task->info->exit_code == RM_OVERFLOW)) {
 		debug(D_MAKEFLOW_HOOK, "rule %d failed because it exceeded the resources limits.\n", n->nodeid);

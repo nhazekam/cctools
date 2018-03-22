@@ -742,13 +742,7 @@ static void makeflow_node_complete(struct dag *d, struct dag_node *n, struct bat
 		list_first_item(n->task->output_files);
 		while((bf = list_next_item(n->task->output_files))) {
 			f = dag_file_lookup_or_create(d, bf->outer_name);
-
-			/* Either the file was created and not confirmed or a hook removed the file. */
-			if(f->state == DAG_FILE_STATE_EXPECT || f->state == DAG_FILE_STATE_DELETE) {
-				makeflow_clean_file(d, remote_queue, f);
-			} else {
-				makeflow_clean_file(d, remote_queue, f);
-			}
+			makeflow_clean_file(d, remote_queue, f);
 		}
 
 		if(task->info->disk_allocation_exhausted) {
