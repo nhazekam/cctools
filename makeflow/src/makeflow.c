@@ -1687,7 +1687,7 @@ int main(int argc, char *argv[])
 				cache_mode = 0;
 				break;
 			case LONG_OPT_HOOK_EXAMPLE:
-				makeflow_hook_register(&makeflow_hook_example);
+				makeflow_hook_register(&makeflow_hook_example, &hook_args);
 				break;
 			case LONG_OPT_WQ_WAIT_FOR_WORKERS:
 				wq_wait_queue_size = optarg;
@@ -1725,34 +1725,34 @@ int main(int argc, char *argv[])
 				jx_array_append(jx_lookup(hook_args, "shared_fs_list"), jx_string(optarg));
 				break;
 			case LONG_OPT_STORAGE_TYPE:
-				makeflow_hook_register(&makeflow_hook_storage_allocation);
+				makeflow_hook_register(&makeflow_hook_storage_allocation, &hook_args);
 				jx_insert(hook_args, jx_string("storage_allocation_type"), jx_integer(atoi(optarg)));
 				break;
 			case LONG_OPT_STORAGE_LIMIT:
-				makeflow_hook_register(&makeflow_hook_storage_allocation);
+				makeflow_hook_register(&makeflow_hook_storage_allocation, &hook_args);
 				jx_insert(hook_args, jx_string("storage_allocation_limit"), jx_integer(string_metric_parse(optarg)));
 				break;
 			case LONG_OPT_STORAGE_PRINT:
-				makeflow_hook_register(&makeflow_hook_storage_allocation);
+				makeflow_hook_register(&makeflow_hook_storage_allocation, &hook_args);
 				jx_insert(hook_args, jx_string("storage_allocation_print"), jx_string(optarg));
 				break;
 			case LONG_OPT_DOCKER:
-				makeflow_hook_register(&makeflow_hook_docker);
+				makeflow_hook_register(&makeflow_hook_docker, &hook_args);
 				jx_insert(hook_args, jx_string("docker_container_image"), jx_string(optarg));
 				break;
 			case LONG_OPT_SKIP_FILE_CHECK:
 				skip_file_check = 1;
 				break;
 			case LONG_OPT_DOCKER_TAR:
-				makeflow_hook_register(&makeflow_hook_docker);
+				makeflow_hook_register(&makeflow_hook_docker, &hook_args);
 				jx_insert(hook_args, jx_string("docker_container_tar"), jx_string(optarg));
 				break;
 			case LONG_OPT_DOCKER_OPT:
-				makeflow_hook_register(&makeflow_hook_docker);
+				makeflow_hook_register(&makeflow_hook_docker, &hook_args);
 				jx_insert(hook_args, jx_string("docker_container_opt"), jx_string(optarg));
 				break;
 			case LONG_OPT_SINGULARITY:
-				makeflow_hook_register(&makeflow_hook_singularity);
+				makeflow_hook_register(&makeflow_hook_singularity, &hook_args);
 				jx_insert(hook_args, jx_string("singularity_container_image"), jx_string(optarg));
 				break;
 			case LONG_OPT_SINGULARITY_OPT:
@@ -1840,7 +1840,7 @@ int main(int argc, char *argv[])
 				save_failure = 0;
 				break;
 			case LONG_OPT_SANDBOX:
-				makeflow_hook_register(&makeflow_hook_sandbox);
+				makeflow_hook_register(&makeflow_hook_sandbox, &hook_args);
 				break;
 			case LONG_OPT_ARGV: {
 				debug(D_MAKEFLOW, "loading argv from %s", optarg);
@@ -1890,10 +1890,10 @@ int main(int argc, char *argv[])
 	makeflow_hook_register(&makeflow_hook_shared_fs);
 
 	if(save_failure){
-		makeflow_hook_register(&makeflow_hook_fail_dir);
+		makeflow_hook_register(&makeflow_hook_fail_dir, &hook_args);
 	}
 
-	makeflow_hook_create(hook_args);
+	makeflow_hook_create();
 
 	if((argc - optind) == 1) {
 		if (dagfile) {

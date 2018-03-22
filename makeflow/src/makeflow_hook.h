@@ -103,6 +103,7 @@ struct makeflow_hook {
 	 * debug and failure statements.
 	 */
 	const char * module_name;
+	struct jx * args;
 
 	/* Register hook.
 	 *
@@ -118,10 +119,12 @@ struct makeflow_hook {
 	 *
 	 * @param hook The hook that is being registered.
 	 * @param hook_list The list of already registered hooks.
+	 * @param args The JX struct that is used in calling env. Used to pass back
+	 *      unique args struct for each instance of hook.
 	 * @return MAKEFLOW_HOOK_SUCCESS if it is to be added, 
 	 *		and MAKEFLOW_HOOK_SKIP if it is to be skipped.
 	 */
-	int (*register_hook) (struct makeflow_hook *hook, struct list *hook_list);
+	int (*register_hook) (struct makeflow_hook *hook, struct list *hook_list, struct jx **args);
 
 	/* Initialize hooks.
 	 *
@@ -400,9 +403,9 @@ struct dag_file * makeflow_hook_add_output_file(struct dag *d, struct batch_task
  Example of use see above.
 @param hook The new hook to register.
 */
-int makeflow_hook_register(struct makeflow_hook *hook);
+int makeflow_hook_register(struct makeflow_hook *hook, struct jx **args);
 
-int makeflow_hook_create(struct jx *args);
+int makeflow_hook_create();
 
 int makeflow_hook_destroy(struct dag *d);
 

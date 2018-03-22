@@ -55,21 +55,25 @@ struct dag_file * makeflow_hook_add_output_file(struct dag *d, struct batch_task
 }
 
 
-int makeflow_hook_register(struct makeflow_hook *hook) {
+int makeflow_hook_register(struct makeflow_hook *hook, struct jx **args) {
 	assert(hook);
 	if (!makeflow_hooks) makeflow_hooks = list_create();
 
 	/* Add hook by default, if it doesn't exists in list of hooks. */
 	int rc = MAKEFLOW_HOOK_SUCCESS;
+	struct jx *new_args;
 	struct makeflow_hook *h = NULL;
 	debug(D_MAKEFLOW_HOOK, "Hook %s:trying to registered",hook->module_name?hook->module_name:"");
 
 	if(hook->register_hook){
-		rc = hook->register_hook(hook, makeflow_hooks);
+		rc = hook->register_hook(hook, makeflow_hooks, args);
 	} else {
+		new_args = jx_object(NULL);
 		list_first_item(makeflow_hooks);
 		while((h = list_next_item(makeflow_hooks))){
 			if(!strcmp(h->module_name, hook->module_name)){
+				jx_delete(new_args);
+				*args = h->args;
 				rc = MAKEFLOW_HOOK_SKIP;
 				break;
 			}
@@ -79,20 +83,35 @@ int makeflow_hook_register(struct makeflow_hook *hook) {
 	if(rc == MAKEFLOW_HOOK_SUCCESS){
 		h = xxmalloc(sizeof(*h));
 		memcpy(h, hook, sizeof(*h));
+		h->args = new_args;
+		*args = new_args;
 		debug(D_MAKEFLOW_HOOK, "Hook %s:registered",h->module_name?h->module_name:"");
 
 		list_push_tail(makeflow_hooks, h);
 	} else if(rc == MAKEFLOW_HOOK_FAILURE){
-		debug(D_MAKEFLOW_HOOK, "Hook %s:register failed",h->module_name?h->module_name:"");
-	} else if(rc == MAKEFLOW_HOOK_SKIP){
-		debug(D_MAKEFLOW_HOOK, "Hook %s:register skipped",h->module_name?h->module_name:"");
+		// Not safe, need to think about this
+		args = NULL;
+		debug(D_ERROR|D_MAKEFLOW_HOOK, "Hook %s:register failed",h->module_name?h->module_name:"");
 	}
 
 	return rc;
 }
 
-int makeflow_hook_create(struct jx *args){
-	MAKEFLOW_HOOK_CALL(create, args);
+int makeflow_hook_create(){
+	if (!makeflow_hooks)
+		return MAKEFLOW_HOOK_SUCCESS;
+
+	list_first_item(makeflow_hooks);
+	for (struct makeflow_hook *h; (h = list_next_item(makeflow_hooks));) {
+		int rc = MAKEFLOW_HOOK_SUCCESS;
+		if (h->create){
+			rc = h->create(h->args);
+		}
+		if (rc !=MAKEFLOW_HOOK_SUCCESS){
+			debug(D_ERROR|D_MAKEFLOW_HOOK, "hook %s:create returned %d",h->module_name, rc);
+			return rc;
+		}
+	}
 	return MAKEFLOW_HOOK_SUCCESS;
 }
 
