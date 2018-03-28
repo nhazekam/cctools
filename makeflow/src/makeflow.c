@@ -1179,6 +1179,7 @@ int main(int argc, char *argv[])
 	extern struct makeflow_hook makeflow_hook_docker;
 	extern struct makeflow_hook makeflow_hook_example;
 	extern struct makeflow_hook makeflow_hook_fail_dir;
+	extern struct makeflow_hook makeflow_hook_failure_handler;
 	/* Using fail directories is on by default */
 	int save_failure = 1;
 	extern struct makeflow_hook makeflow_hook_resource_monitor;
@@ -1186,6 +1187,7 @@ int main(int argc, char *argv[])
 	extern struct makeflow_hook makeflow_hook_shared_fs;
 	extern struct makeflow_hook makeflow_hook_singularity;
 	extern struct makeflow_hook makeflow_hook_storage_allocation;
+	extern struct makeflow_hook makeflow_hook_vc3_builder;
 
 	random_init();
 	debug_config(argv[0]);
@@ -1223,11 +1225,13 @@ int main(int argc, char *argv[])
 		LONG_OPT_HOOK_EXAMPLE,
 		LONG_OPT_FILE_CREATION_PATIENCE_WAIT_TIME,
 		LONG_OPT_FAIL_DIR,
+		LONG_OPT_FAILURE_HANDLER,
 		LONG_OPT_GC_SIZE,
 		LONG_OPT_LOCAL_CORES,
 		LONG_OPT_LOCAL_MEMORY,
 		LONG_OPT_LOCAL_DISK,
 		LONG_OPT_MONITOR,
+		LONG_OPT_MONITOR_EXE,
 		LONG_OPT_MONITOR_INTERVAL,
 		LONG_OPT_MONITOR_LOG_NAME,
 		LONG_OPT_MONITOR_OPENED_FILES,
@@ -1257,6 +1261,8 @@ int main(int argc, char *argv[])
 		LONG_OPT_JX_ARGS,
 		LONG_OPT_JX_DEFINE,
 		LONG_OPT_SKIP_FILE_CHECK,
+		LONG_OPT_VC3_EXE,
+		LONG_OPT_VC3_OPT,
 		LONG_OPT_UMBRELLA_BINARY,
 		LONG_OPT_UMBRELLA_LOG_PREFIX,
 		LONG_OPT_UMBRELLA_MODE,
@@ -1295,6 +1301,7 @@ int main(int argc, char *argv[])
 		{"disable-cache", no_argument, 0, LONG_OPT_DISABLE_BATCH_CACHE},
 		{"email", required_argument, 0, 'm'},
 		{"enable_hook_example", no_argument, 0, LONG_OPT_HOOK_EXAMPLE},
+		{"failure-handler", required_argument, 0, LONG_OPT_FAILURE_HANDLER},
 		{"wait-for-files-upto", required_argument, 0, LONG_OPT_FILE_CREATION_PATIENCE_WAIT_TIME},
 		{"gc", required_argument, 0, 'g'},
 		{"gc-size", required_argument, 0, LONG_OPT_GC_SIZE},
@@ -1307,6 +1314,7 @@ int main(int argc, char *argv[])
 		{"max-local", required_argument, 0, 'j'},
 		{"max-remote", required_argument, 0, 'J'},
 		{"monitor", required_argument, 0, LONG_OPT_MONITOR},
+		{"monitor-exe", required_argument, 0, LONG_OPT_MONITOR_EXE},
 		{"monitor-interval", required_argument, 0, LONG_OPT_MONITOR_INTERVAL},
 		{"monitor-log-name", required_argument, 0, LONG_OPT_MONITOR_LOG_NAME},
 		{"monitor-with-opened-files", no_argument, 0, LONG_OPT_MONITOR_OPENED_FILES},
@@ -1330,6 +1338,8 @@ int main(int argc, char *argv[])
 		{"submission-timeout", required_argument, 0, 'S'},
 		{"summary-log", required_argument, 0, 'f'},
 		{"tickets", required_argument, 0, LONG_OPT_TICKETS},
+		{"vc3-exe", required_argument, 0, LONG_OPT_VC3_EXE},
+		{"vc3-opt", required_argument, 0, LONG_OPT_VC3_OPT},
 		{"version", no_argument, 0, 'v'},
 		{"log-verbose", no_argument, 0, LONG_OPT_LOG_VERBOSE_MODE},
 		{"working-dir", required_argument, 0, LONG_OPT_WORKING_DIR},
@@ -1576,6 +1586,10 @@ int main(int argc, char *argv[])
 			case LONG_OPT_MONITOR:
 				makeflow_hook_register(&makeflow_hook_resource_monitor, &hook_args);
 				jx_insert(hook_args, jx_string("resource_monitor_log_dir"), jx_string(optarg));
+				break;
+			case LONG_OPT_MONITOR_EXE:
+				makeflow_hook_register(&makeflow_hook_resource_monitor, &hook_args);
+				jx_insert(hook_args, jx_string("resource_monitor_exe"), jx_string(optarg));
 				break;
 			case LONG_OPT_MONITOR_INTERVAL:
 				makeflow_hook_register(&makeflow_hook_resource_monitor, &hook_args);
@@ -1835,6 +1849,20 @@ int main(int argc, char *argv[])
 				break;
 			case LONG_OPT_SANDBOX:
 				makeflow_hook_register(&makeflow_hook_sandbox, &hook_args);
+				break;
+			case LONG_OPT_VC3_EXE:
+				makeflow_hook_register(&makeflow_hook_vc3_builder, &hook_args);
+				jx_insert(hook_args, jx_string("vc3_exe"), jx_string(optarg));
+				break;
+			case LONG_OPT_VC3_OPT:
+				makeflow_hook_register(&makeflow_hook_vc3_builder, &hook_args);
+				jx_insert(hook_args, jx_string("vc3_opt"), jx_string(optarg));
+				break;
+			case LONG_OPT_FAILURE_HANDLER:
+				makeflow_hook_register(&makeflow_hook_failure_handler, &hook_args);
+				if(!jx_lookup(hook_args, "failure_conditions"))
+					jx_insert(hook_args, jx_string("failure_conditions"), jx_array(NULL));
+				jx_array_append(jx_lookup(hook_args, "failure_conditions"), jx_string(optarg));
 				break;
 			case LONG_OPT_ARGV: {
 				debug(D_MAKEFLOW, "loading argv from %s", optarg);

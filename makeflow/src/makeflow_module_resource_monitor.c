@@ -24,17 +24,22 @@
 
 #define DEFAULT_MONITOR_LOG_FORMAT "resource-rule-%%"
 
+static int instances = 0;
+
 struct makeflow_monitor {
 	int enable_debug;
 	int enable_time_series;
 	int enable_list_files;
 
 	int interval;
+	char *measure_dir;
 	char *log_dir;
 	char *log_format;
 	char *log_prefix;
 	char *exe;
 	const char *exe_remote;
+
+	int instance;
 };
 
 struct makeflow_monitor *makeflow_monitor_create()
@@ -45,11 +50,14 @@ struct makeflow_monitor *makeflow_monitor_create()
 	m->enable_list_files = 0;
 
 	m->interval = 1; // in seconds
+	m->measure_dir = NULL;
 	m->log_dir = NULL;
 	m->log_format = NULL;
 	m->log_prefix = NULL;
 	m->exe = NULL;
 	m->exe_remote = NULL;
+
+	m->instance = instances++;
 
 	return m;
 }
@@ -73,6 +81,14 @@ static int create(void ** instance_struct, struct jx *args)
 	struct makeflow_monitor *monitor = makeflow_monitor_create();
 	*instance_struct = monitor;
 
+	jx_print_stream(args, stderr);
+
+	if (jx_lookup_string(args, "resource_monitor_exe"))
+		monitor->exe = xxstrdup(jx_lookup_string(args, "resource_monitor_exe"));
+	} else {
+		monitor->exe = resource_monitor_locate(NULL);
+	}
+
 	if (jx_lookup_string(args, "resource_monitor_log_dir"))
 		monitor->log_dir = xxstrdup(jx_lookup_string(args, "resource_monitor_log_dir"));
 
@@ -81,6 +97,13 @@ static int create(void ** instance_struct, struct jx *args)
 
 	if(jx_lookup_integer(args, "resource_monitor_interval"))
 		monitor->interval = jx_lookup_integer(args, "resource_monitor_interval");
+
+	if (jx_lookup_string(args, "resource_monitor_measure_dir")) {
+		monitor->measure_dir = xxstrdup(jx_lookup_string(args, "resource_monitor_measure_dir"));
+	} else {
+		monitor->measure_dir = xxstrdup("$PWD");
+	}
+
 
 	monitor->enable_time_series = jx_lookup_integer(args, "resource_monitor_enable_time_series");
 	monitor->enable_list_files = jx_lookup_integer(args, "resource_monitor_enable_list_files");
@@ -100,7 +123,6 @@ static int create(void ** instance_struct, struct jx *args)
 		return MAKEFLOW_HOOK_FAILURE;
 	}
 
-	monitor->exe = resource_monitor_locate(NULL);
 	if (!monitor->exe) {
 		debug(D_ERROR|D_MAKEFLOW_HOOK,"Monitor mode was enabled, but could not find resource_monitor in PATH.");
 		return MAKEFLOW_HOOK_FAILURE;
@@ -119,6 +141,8 @@ static int destroy(void * instance_struct, struct dag *d)
 
 	if (monitor->exe)
 		free(monitor->exe);
+
+	free(monitor->measure_dir);
 
 	free(monitor);
 	return MAKEFLOW_HOOK_SUCCESS;
@@ -212,7 +236,8 @@ static int node_submit(void * instance_struct, struct dag_node *n, struct batch_
 					extra_options,
 					monitor->enable_debug, 
 					monitor->enable_time_series, 
-					monitor->enable_list_files);
+					monitor->enable_list_files,
+					monitor->measure_dir);
 
 	free(executable);
 	free(extra_options);
@@ -336,6 +361,7 @@ static int node_end(void * instance_struct, struct dag_node *n, struct batch_tas
 
 static int node_fail(void * instance_struct, struct dag_node *n, struct batch_task *task)
 {
+	struct makeflow_monitor *monitor = (struct makeflow_monitor*)instance_struct;
 	int rc = MAKEFLOW_HOOK_FAILURE;
 	/* Currently checking the case where either rm ran out of disk or it caught an overflow. Slightly redundant. */
 	if ((task->info->disk_allocation_exhausted) || (task->info->exit_code == RM_OVERFLOW)) {
@@ -353,17 +379,18 @@ static int node_fail(void * instance_struct, struct dag_node *n, struct batch_ta
 		rc = MAKEFLOW_HOOK_SUCCESS;
 	}
 
-	category_allocation_t next = category_next_label(n->category, n->resource_request,
+	if(monitor->instance == instances){
+		category_allocation_t next = category_next_label(n->category, n->resource_request,
 			/* resource overflow */ 1, n->resources_requested, n->resources_measured);
 
-	if (next != CATEGORY_ALLOCATION_ERROR) {
-		debug(D_MAKEFLOW_HOOK, "Rule %d resubmitted using new resource allocation.\n", n->nodeid);
-		n->resource_request = next;
-		makeflow_log_state_change(n->d, n, DAG_NODE_STATE_WAITING);
-	} else {
-		debug(D_MAKEFLOW_HOOK, "Rule %d failed to setting new resource allocation.\n", n->nodeid);
+		if (next != CATEGORY_ALLOCATION_ERROR) {
+			debug(D_MAKEFLOW_HOOK, "Rule %d resubmitted using new resource allocation.\n", n->nodeid);
+			n->resource_request = next;
+			makeflow_log_state_change(n->d, n, DAG_NODE_STATE_WAITING);
+		} else {
+			debug(D_MAKEFLOW_HOOK, "Rule %d failed to setting new resource allocation.\n", n->nodeid);
+		}
 	}
-
 	return rc;
 }
 

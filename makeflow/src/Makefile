@@ -15,11 +15,13 @@ MAKEFLOW_HOOKS = makeflow_hook_example.o
 MAKEFLOW_MODULES = \
  makeflow_module_docker.o\
  makeflow_module_fail_dir.o\
+ makeflow_module_failure_handler.o\
  makeflow_module_resource_monitor.o\
  makeflow_module_sandbox.o\
  makeflow_module_shared_fs.o\
  makeflow_module_singularity.o\
  makeflow_module_storage_allocation.o\
+ makeflow_module_vc3_builder.o\
 
 TARGETS = $(PROGRAMS)
 

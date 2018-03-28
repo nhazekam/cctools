@@ -25,10 +25,11 @@ struct list * makeflow_hooks = NULL;
 		int rc = MAKEFLOW_HOOK_SUCCESS; \
 		if (h->hook_name) \
 			rc = h->hook_name(h->instance_struct, __VA_ARGS__); \
-		if (rc !=MAKEFLOW_HOOK_SUCCESS) \
+		if (rc !=MAKEFLOW_HOOK_SUCCESS){ \
 			debug(D_ERROR|D_MAKEFLOW_HOOK,"hook %s:" #hook_name " returned %d",h->module_name?h->module_name:"", rc); \
 			list_cursor_destroy(cur); \
 			return rc; \
+		} \
 	} \
 } while (0)
 
@@ -111,6 +112,7 @@ int makeflow_hook_create(){
 	struct list_cursor *cur = list_cursor_create(makeflow_hooks);
 	struct makeflow_hook *h;
 	for (list_seek(cur, 0); list_get(cur, (void**)&h); list_next(cur)){
+		debug(D_MAKEFLOW_HOOK, "hook %s:initializing",h->module_name);
 		int rc = MAKEFLOW_HOOK_SUCCESS;
 		if (h->create){
 			rc = h->create(&(h->instance_struct), h->args);
