@@ -2,7 +2,6 @@
 #include "create_dir.h"
 #include "debug.h"
 #include "jx.h"
-#include "jx_print.h"
 #include "path.h"
 #include "rmonitor.h"
 #include "stringtools.h"
@@ -81,9 +80,7 @@ static int create(void ** instance_struct, struct jx *args)
 	struct makeflow_monitor *monitor = makeflow_monitor_create();
 	*instance_struct = monitor;
 
-	jx_print_stream(args, stderr);
-
-	if (jx_lookup_string(args, "resource_monitor_exe"))
+	if (jx_lookup_string(args, "resource_monitor_exe")){
 		monitor->exe = xxstrdup(jx_lookup_string(args, "resource_monitor_exe"));
 	} else {
 		monitor->exe = resource_monitor_locate(NULL);

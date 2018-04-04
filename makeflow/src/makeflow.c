@@ -1728,6 +1728,7 @@ int main(int argc, char *argv[])
 				break;
 			case LONG_OPT_SHARED_FS:
 				if (optarg[0] != '/') fatal("Shared fs must be specified as an absolute path");
+				makeflow_hook_register(&makeflow_hook_shared_fs, &hook_args);
 				if(!jx_lookup(hook_args, "shared_fs_list"))
 					jx_insert(hook_args, jx_string("shared_fs_list"),jx_array(NULL));
 				jx_array_append(jx_lookup(hook_args, "shared_fs_list"), jx_string(optarg));
@@ -1909,7 +1910,7 @@ int main(int argc, char *argv[])
 		fatal("enforcement and Umbrella are mutually exclusive\n");
 	}
 
-	makeflow_hook_register(&makeflow_hook_shared_fs);
+	makeflow_hook_register(&makeflow_hook_shared_fs, &hook_args);
 
 	if(save_failure){
 		makeflow_hook_register(&makeflow_hook_fail_dir, &hook_args);
