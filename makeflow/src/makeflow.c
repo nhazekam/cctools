@@ -225,7 +225,10 @@ static void makeflow_abort_job( struct dag *d, struct dag_node *n, struct batch_
 
 	batch_job_remove(q, jobid);
 
-	makeflow_hook_node_abort(n);
+	int hs = makeflow_hook_node_abort(n);
+	if(hs != MAKEFLOW_HOOK_SUCCESS){
+		makeflow_failed_flag = 1;
+	}
 	makeflow_log_state_change(d, n, DAG_NODE_STATE_ABORTED);
 
 	struct batch_file *bf;
@@ -457,7 +460,11 @@ static batch_job_id_t makeflow_node_submit_retry( struct batch_queue *queue, str
 	/* Display the fully elaborated command, just like Make does. */
 	printf("submitting job: %s\n", task->command);
 
-	makeflow_hook_batch_submit(task);
+	int hs = makeflow_hook_batch_submit(task);
+	if(hs != MAKEFLOW_HOOK_SUCCESS){
+		makeflow_failed_flag = 1;
+		return -1;
+	}
 
 	while(1) {
 		if(makeflow_abort_flag) break;
@@ -526,7 +533,10 @@ static void makeflow_node_submit(struct dag *d, struct dag_node *n, const struct
 	/* This augments the task struct, should be replaced with node_submit in future. */
 	makeflow_node_expand(n, queue, task);
 
-	makeflow_hook_node_submit(n, task);
+	int hs = makeflow_hook_node_submit(n, task);
+	if(hs != MAKEFLOW_HOOK_SUCCESS){
+		makeflow_failed_flag = 1;
+	}
 
 	/* Logs the expectation of output files. */
 	makeflow_log_batch_file_list_state_change(d,task->output_files,DAG_FILE_STATE_EXPECT);
@@ -610,7 +620,11 @@ static int makeflow_node_ready(struct dag *d, struct dag_node *n, const struct r
 	/* If all makeflow checks pass for this node we will 
 	return the result of the hooks, which will be 1 if all pass
 	and 0 if any fail. */
-	return (makeflow_hook_node_check(n, remote_queue) == MAKEFLOW_HOOK_SUCCESS);
+	int hs = makeflow_hook_node_check(n, remote_queue);
+	if(hs != MAKEFLOW_HOOK_SUCCESS){
+		makeflow_failed_flag = 1;
+	}
+	return (hs == MAKEFLOW_HOOK_SUCCESS);
 }
 
 int makeflow_nodes_local_waiting_count(const struct dag *d) {
@@ -702,7 +716,10 @@ static void makeflow_node_complete(struct dag *d, struct dag_node *n, struct bat
 	/* As integration moves forward batch_task will also be passed. */
 	/* This is intended for changes to the batch_task that need no
 		no context from dag_node/dag, such as shared_fs. */
-	makeflow_hook_batch_retrieve(task);
+	int hs = makeflow_hook_batch_retrieve(task);
+	if(hs != MAKEFLOW_HOOK_SUCCESS){
+		makeflow_failed_flag = 1;
+	}
 
 	if(n->state != DAG_NODE_STATE_RUNNING)
 		return;
@@ -711,7 +728,10 @@ static void makeflow_node_complete(struct dag *d, struct dag_node *n, struct bat
 		makeflow_local_resources_add(local_resources,n);
 	}
 
-	makeflow_hook_node_end(n, task);
+	hs = makeflow_hook_node_end(n, task);
+	if(hs != MAKEFLOW_HOOK_SUCCESS){
+		makeflow_failed_flag = 1;
+	}
 
 	if (task->info->exited_normally && task->info->exit_code == 0) {
 		list_first_item(n->task->output_files);
@@ -734,7 +754,7 @@ static void makeflow_node_complete(struct dag *d, struct dag_node *n, struct bat
 		/* As integration moves forward batch_task will also be passed. */
 		/* If a hook indicates failure here, it is not fatal, but will result
 			in a failed task. */
-		int hook_success = makeflow_hook_node_fail(n, task);
+		hs = makeflow_hook_node_fail(n, task);
 
 		makeflow_log_state_change(d, n, DAG_NODE_STATE_FAILED);
 
@@ -754,7 +774,7 @@ static void makeflow_node_complete(struct dag *d, struct dag_node *n, struct bat
 			}
 		}
 
-		if (!hook_success || makeflow_retry_flag || task->info->exit_code == 101) {
+		if ((hs != MAKEFLOW_HOOK_SUCCESS) || makeflow_retry_flag || task->info->exit_code == 101) {
 			n->failure_count++;
 			if (n->failure_count > makeflow_retry_max) {
 				notice(D_MAKEFLOW_RUN, "job %s failed too many times.", n->command);
@@ -777,7 +797,10 @@ static void makeflow_node_complete(struct dag *d, struct dag_node *n, struct bat
 			f->reference_count+= -1;
 			if(f->reference_count == 0 && f->state == DAG_FILE_STATE_EXISTS){
 				makeflow_log_file_state_change(d, f, DAG_FILE_STATE_COMPLETE);
-				makeflow_hook_file_complete(f);
+				hs = makeflow_hook_file_complete(f);
+				if(hs != MAKEFLOW_HOOK_SUCCESS){
+					makeflow_failed_flag = 1;
+				}
 			}
 		}
 
@@ -789,7 +812,10 @@ static void makeflow_node_complete(struct dag *d, struct dag_node *n, struct bat
 
 		/* node_success is after file_complete to allow for the final state of the
 			files to be reflected in the structs. Allows for cleanup or archiving.*/
-		makeflow_hook_node_success(n, task);
+		hs = makeflow_hook_node_success(n, task);
+		if(hs != MAKEFLOW_HOOK_SUCCESS){
+			makeflow_failed_flag = 1;
+		}
 
 		makeflow_log_state_change(d, n, DAG_NODE_STATE_COMPLETE);
 	}
@@ -914,9 +940,14 @@ static void makeflow_run( struct dag *d )
  		to the remote or local job table if all ready jobs were found within the archive.
  		Thus makeflow_dispatch_ready_jobs must run at least once more if an archived job was found.
  		*/
+		int hs = makeflow_hook_dag_loop(d);
+		if(hs != MAKEFLOW_HOOK_SUCCESS || hs != MAKEFLOW_HOOK_END){
+			makeflow_failed_flag = 1;
+		}
+
 		if(dag_local_jobs_running(d)==0 && 
 			dag_remote_jobs_running(d)==0 && 
-			(makeflow_hook_dag_loop(d) == MAKEFLOW_HOOK_END) &&
+			hs==MAKEFLOW_HOOK_END &&
 			did_find_archived_job == 0)
 			break;
 
@@ -1864,7 +1895,10 @@ int main(int argc, char *argv[])
 			goto EXIT_WITH_FAILURE;
 	}
 
-	makeflow_hook_create();
+	int hs = makeflow_hook_create();
+	if(hs != MAKEFLOW_HOOK_SUCCESS){
+		goto EXIT_WITH_FAILURE;
+	}
 
 	if((argc - optind) == 1) {
 		if (dagfile) {
@@ -2171,7 +2205,11 @@ int main(int argc, char *argv[])
 	}
 
 	if(clean_mode != MAKEFLOW_CLEAN_NONE) {
-		makeflow_hook_dag_clean(d);
+		hs = makeflow_hook_dag_clean(d);
+		if(hs != MAKEFLOW_HOOK_SUCCESS){
+			debug(D_ERROR, "Failed to clean up makeflow hooks!\n");
+			goto EXIT_WITH_FAILURE;
+		}
 		printf("cleaning filesystem...\n");
 		if(makeflow_clean(d, remote_queue, clean_mode)) {
 			debug(D_ERROR, "Failed to clean up makeflow!\n");
@@ -2186,7 +2224,10 @@ int main(int argc, char *argv[])
 	}
 
 	printf("starting workflow....\n");
-	makeflow_hook_dag_start(d);
+	hs = makeflow_hook_dag_start(d);
+	if(hs != MAKEFLOW_HOOK_SUCCESS){
+		goto EXIT_WITH_FAILURE;
+	}
 
 	port = batch_queue_port(remote_queue);
 	if(work_queue_port_file)
