@@ -226,6 +226,7 @@ char *batch_wrapper_expand(struct batch_task *t, struct jx *spec) {
 	assert(t);
 	assert(spec);
 
+	struct jx *task = batch_task_to_jx(t);
 	struct jx *j;
 	unsigned commands = 0;
 	char *result = NULL;
@@ -234,6 +235,15 @@ char *batch_wrapper_expand(struct batch_task *t, struct jx *spec) {
 	if (!jx_istype(spec, JX_OBJECT)) {
 		debug(D_NOTICE|D_BATCH, "wrapper command spec must be a JX object");
 		goto FAIL;
+	}
+
+	struct jx *inputs = jx_lookup(spec, "inputs");
+	if(inputs) {
+		if (!jx_istype(inputs, JX_ARRAY)) {
+			debug(D_NOTICE|D_BATCH, "inputs must be specified in an array");
+			goto FAIL
+		}
+		batch_wrapper_parse_inputs();
 	}
 
 	struct jx *prefix = jx_lookup(spec, "prefix");

@@ -10,7 +10,11 @@ See the file COPYING for details.
 #include "batch_task.h"
 #include "batch_file.h"
 #include "batch_wrapper.h"
+<<<<<<< HEAD
 #include "sha1.h"
+=======
+#include "rmsummary.h"
+>>>>>>> Added to_jx functions for batch file and task
 #include "stringtools.h"
 #include "xxmalloc.h"
 #include "debug.h"
@@ -207,6 +211,37 @@ char * batch_task_generate_id(struct batch_task *t) {
 	t->hash = xxstrdup(sha1_string(hash));
 	free(hash);
 	return xxstrdup(t->hash);
+}
+
+struct jx * batch_task_to_jx(struct batch_task *t)
+{
+	struct jx *tj = jx_object(NULL);
+
+	struct batch_file *f;
+	struct list_cursor *cur;
+
+	jx_insert(tj, jx_string("ENV_LIST"), jx_copy(t->envlist));
+
+	jx_insert(tj, jx_string("RESOURCES"), rmsummary_to_json(t->resources, 1));
+
+	struct jx *outputs = jx_array(NULL);
+	cur = list_cursor_create(t->output_files);
+	for(list_seek(cur, 0); list_get(cur, (void **)&f); list_next(cur)){
+		jx_array_insert(outputs, batch_file_to_jx(f));
+	}
+	list_cursor_destroy(cur);
+	jx_insert(tj, jx_string("OUTPUTS"), outputs);
+
+	struct jx *inputs = jx_array(NULL);
+	cur = list_cursor_create(t->input_files);
+	for(list_seek(cur, 0); list_get(cur, (void **)&f); list_next(cur)){
+		jx_array_insert(inputs, batch_file_to_jx(f));
+	}
+	list_cursor_destroy(cur);
+	jx_insert(tj, jx_string("INPUTS"), inputs);
+
+	jx_insert(tj, jx_string("COMMAND"), jx_string(t->command));
+	return tj;
 }
 
 /* vim: set noexpandtab tabstop=4: */

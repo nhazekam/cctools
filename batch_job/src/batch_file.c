@@ -110,3 +110,10 @@ char * batch_file_generate_id(struct batch_file *f) {
 	return xxstrdup(f->hash);
 }
 
+struct jx * batch_file_to_jx(struct batch_file *f)
+{
+	struct jx *fj = jx_object(NULL);
+	jx_insert(fj, jx_string("OUTER_NAME"), jx_string(f->outer_name));
+	jx_insert(fj, jx_string("INNER_NAME"), jx_string(f->inner_name));
+	return fj;
+}
