@@ -73,4 +73,15 @@ char * batch_file_generate_id(struct batch_file *f);
 */
 char *  batch_file_generate_id_dir(char *file_name);
 
+/** Output batch_file as a jx object.
+ Format as:
+{
+	"OUTER_NAME"=outer_name,
+	"INNER_NAME"=inner_name
+}
+@param file A batch_file struct to be jxified.
+@return pointer the jx struct created.
+*/
+struct jx * batch_file_to_jx(struct batch_file *f);
+
 #endif

@@ -120,5 +120,18 @@ void batch_task_set_info(struct batch_task *t, struct batch_job_info *info);
 */
 char * batch_task_generate_id(struct batch_task *t);
 
+/** Output the batch_task in jx.
+{
+	"COMMAND"=t->command,
+	"INPUTS"=[t->inputs],
+	"OUTPUTS"=[t->outputs],
+	"RESOURCES"=to_jx(t->resources),
+	"ENV_LIST"=t->envlist
+}
+@param t The batch_task being output as jx.
+@return The jx object created from t.
+*/
+struct jx * batch_task_to_jx(struct batch_task *t);
+
 #endif
 /* vim: set noexpandtab tabstop=4: */
