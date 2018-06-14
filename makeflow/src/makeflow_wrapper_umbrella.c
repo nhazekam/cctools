@@ -176,7 +176,7 @@ void makeflow_wrap_umbrella(struct batch_task *task, struct dag_node *n, struct 
 	debug(D_MAKEFLOW_HOOK, "umbrella wrapper command: %s\n", umbrella_command);
 
 	batch_task_wrap_command(task, umbrella_command);
-	debug(D_MAKEFLOW_HOOK, "umbrella command: %s\n", task->command);
+	debug(D_MAKEFLOW_HOOK, "umbrella command: %s\n", task->command->command);
 
 	free(local_binary);
 	free(local_spec);

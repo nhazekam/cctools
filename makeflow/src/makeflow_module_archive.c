@@ -208,7 +208,7 @@ static int makeflow_archive_write_task_info(struct archive_instance *a, struct d
  *	OUTPUT_FILES: Alphabetic list of output file inner_names
  */
 	struct jx *task_jx = jx_object(NULL);
-	jx_insert(task_jx, jx_string("COMMAND"), jx_string(t->command));
+	jx_insert(task_jx, jx_string("COMMAND"), batch_command_to_jx(t->command));
 	jx_insert(task_jx, jx_string("SRC_COMMAND"), jx_string(n->command));
 	jx_insert(task_jx, jx_string("SRC_LINE"), jx_integer(n->linenum));
 	jx_insert(task_jx, jx_string("SRC_MAKEFLOW"), jx_string(a->source_makeflow));

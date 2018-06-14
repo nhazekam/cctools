@@ -22,6 +22,7 @@ MAKEFLOW_MODULES = \
  makeflow_module_singularity.o\
  makeflow_module_storage_allocation.o\
  makeflow_module_vc3_builder.o\
+ makeflow_module_wrapper.o\
 
 TARGETS = $(PROGRAMS)
 

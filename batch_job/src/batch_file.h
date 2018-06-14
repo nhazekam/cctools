@@ -21,9 +21,10 @@ struct batch_file {
 @param queue The batch_queue that this file is being created for. 
 @param outer_name A pointer to the file's name host/submission side.
 @param inner_name  A pointer to the file's name execution side.
+@param hash  A pointer to a hash of the file's contents if previously hashed.
 @return batch_file struct.
 */
-struct batch_file *batch_file_create(struct batch_queue *queue, const char *outer_name, const char *inner_name );
+struct batch_file *batch_file_create(struct batch_queue *queue, const char *outer_name, const char *inner_name, const char *hash );
 
 /** Delete batch_file struct.
  This includes freeing host_name and exe_name if defined.

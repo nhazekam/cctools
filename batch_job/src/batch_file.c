@@ -5,6 +5,7 @@ See the file COPYING for details.
 */
 
 #include "batch_file.h"
+#include "debug.h"
 #include "sha1.h"
 #include "stringtools.h"
 #include "xxmalloc.h"
@@ -17,7 +18,7 @@ See the file COPYING for details.
  *  IF no inner_name is given, or the specified batch_queue does not support
  *  remote renaming the outer_name will be used.
  **/
-struct batch_file *batch_file_create(struct batch_queue *queue, const char * outer_name, const char * inner_name)
+struct batch_file *batch_file_create(struct batch_queue *queue, const char * outer_name, const char * inner_name, const char *hash)
 {
 	struct batch_file *f = calloc(1,sizeof(*f));
     f->outer_name = xxstrdup(outer_name);
@@ -26,6 +27,10 @@ struct batch_file *batch_file_create(struct batch_queue *queue, const char * out
 		f->inner_name = xxstrdup(inner_name);
 	} else {
 		f->inner_name = xxstrdup(outer_name);
+	}
+
+	if(hash){
+		f->hash = xxstrdup(hash);
 	}
 
     return f;
@@ -102,10 +107,11 @@ int batch_file_outer_compare(const void *file1, const void *file2) {
  * generates the checksum of a file's contents if does not exist */
 char * batch_file_generate_id(struct batch_file *f) {
 	if(!f->hash){
+		debug(D_BATCH, "Hashing batch file %s", f->outer_name);
 		unsigned char *hash = xxcalloc(1, sizeof(char *)*SHA1_DIGEST_LENGTH);
 		sha1_file(f->outer_name, hash);
 		f->hash = xxstrdup(sha1_string(hash));
-		free(hash);
+		debug(D_BATCH, "Hashed batch file %s : %s", f->outer_name, f->hash);
 	}	
 	return xxstrdup(f->hash);
 }
@@ -113,7 +119,10 @@ char * batch_file_generate_id(struct batch_file *f) {
 struct jx * batch_file_to_jx(struct batch_file *f)
 {
 	struct jx *fj = jx_object(NULL);
-	jx_insert(fj, jx_string("OUTER_NAME"), jx_string(f->outer_name));
-	jx_insert(fj, jx_string("INNER_NAME"), jx_string(f->inner_name));
+	jx_insert(fj, jx_string("outer_name"), jx_string(f->outer_name));
+	jx_insert(fj, jx_string("inner_name"), jx_string(f->inner_name));
+	if(f->hash){
+		jx_insert(fj, jx_string("hash"), jx_string(f->hash));
+	}
 	return fj;
 }

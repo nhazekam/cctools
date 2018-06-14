@@ -64,11 +64,18 @@ void batch_wrapper_post(struct batch_wrapper *w, const char *cmd);
 
 /** Set the name prefix to use for the wrapper script.
  * The actual filename will consist of the prefix, an underscore,
- * and some random characters to ensure that the name is unique.
+ * and some identifier to ensure that the name is unique.
  * Defaults to "./wrapper"
  * @param prefix The filename prefix to use.
  */
 void batch_wrapper_prefix(struct batch_wrapper *w, const char *prefix);
+
+/** Set the name postfix to use for the wrapper script.
+ * The actual filename will consist of the prefix, an underscore,
+ * and the provided identifier to ensure that the name is unique.
+ * @param id The filename postfix to use.
+ */
+void batch_wrapper_id(struct batch_wrapper *w, const char *id);
 
 /**
  * Write out the batch_wrapper as a shell script.

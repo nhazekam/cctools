@@ -114,7 +114,7 @@ static int node_submit( void * instance_struct, struct dag_node *n, struct batch
 	}
 
 	char *cmd = string_format("docker run --rm -v $CUR_WORK_DIR:$DEFAULT_DIR -w $DEFAULT_DIR %s %s %s", 
-			d->opt, d->image, t->command);
+			d->opt, d->image, t->command->command);
 	batch_wrapper_cmd(wrapper, cmd);
 	free(cmd);
 

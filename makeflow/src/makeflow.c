@@ -453,7 +453,7 @@ static int makeflow_node_submit_retry( struct batch_queue *queue, struct batch_t
 
 
 	/* Display the fully elaborated command, just like Make does. */
-	printf("submitting job: %s\n", task->command);
+	printf("submitting job: %s\n", task->command->command);
 
 	/* Hook Returns:
 	 *  MAKEFLOW_HOOK_SKIP    : Submit is averted by hook
@@ -471,7 +471,7 @@ static int makeflow_node_submit_retry( struct batch_queue *queue, struct batch_t
 
 		/* This will eventually be replaced by submit (queue, task )... */
 		jobid = batch_job_submit(queue,
-								task->command,
+								task->command->command,
 								batch_files_to_string(queue, task->input_files),
 								batch_files_to_string(queue, task->output_files),
 								task->envlist,
@@ -539,6 +539,9 @@ static void makeflow_node_submit(struct dag *d, struct dag_node *n, const struct
 		makeflow_failed_flag = 1;
 		return;
 	}
+
+	/* Log the existance of input files. */
+	makeflow_log_batch_file_list_state_change(d,task->input_files,DAG_FILE_STATE_EXISTS);
 
 	/* Logs the expectation of output files. */
 	makeflow_log_batch_file_list_state_change(d,task->output_files,DAG_FILE_STATE_EXPECT);
@@ -1187,6 +1190,9 @@ int main(int argc, char *argv[])
 	extern struct makeflow_hook makeflow_hook_singularity;
 	extern struct makeflow_hook makeflow_hook_storage_allocation;
 	extern struct makeflow_hook makeflow_hook_vc3_builder;
+	extern struct makeflow_hook makeflow_hook_wrapper;
+	/* If wrapper is specified finalize with sandbox */
+	int wrappers = 0;
 
 	random_init();
 	debug_config(argv[0]);
@@ -1640,8 +1646,10 @@ int main(int argc, char *argv[])
 				log_verbose_mode = 1;
 				break;
 			case LONG_OPT_WRAPPER:
-				if(!wrapper) wrapper = makeflow_wrapper_create();
-				makeflow_wrapper_add_command(wrapper, optarg);
+				if (makeflow_hook_register(&makeflow_hook_wrapper, &hook_args) == MAKEFLOW_HOOK_FAILURE)
+					goto EXIT_WITH_FAILURE;
+				jx_insert(hook_args, jx_string("wrapper_jx"), jx_string(optarg));
+				wrappers = 1;
 				break;
 			case LONG_OPT_WRAPPER_INPUT:
 				if(!wrapper) wrapper = makeflow_wrapper_create();
@@ -1855,6 +1863,12 @@ int main(int argc, char *argv[])
 	// REGISTER HOOKS HERE
 	if (enforcer && umbrella) {
 		fatal("enforcement and Umbrella are mutually exclusive\n");
+	}
+
+	/** Wrappers need to finalize and create a sandbox after the last wrapper. */
+	if(wrappers){
+		if (makeflow_hook_register(&makeflow_hook_sandbox, &hook_args) == MAKEFLOW_HOOK_FAILURE)
+			goto EXIT_WITH_FAILURE;
 	}
 
 	if (makeflow_hook_register(&makeflow_hook_shared_fs, &hook_args) == MAKEFLOW_HOOK_FAILURE)
