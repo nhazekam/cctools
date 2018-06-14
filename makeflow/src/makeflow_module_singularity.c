@@ -70,7 +70,7 @@ static int node_submit( void * instance_struct, struct dag_node *n, struct batch
 	batch_wrapper_prefix(wrapper, CONTAINER_SINGULARITY_SH);
 
 	/* Assumes a /disk dir in the image. */
-	char *task_cmd = string_escape_shell(t->command);
+	char *task_cmd = string_escape_shell(t->command->command);
 	char *cmd = string_format("singularity exec --home $(pwd) %s %s sh -c %s", s->opt, s->image, task_cmd);
 	free(task_cmd);
 	batch_wrapper_cmd(wrapper, cmd);

@@ -7,30 +7,41 @@ See the file COPYING for details.
 #ifndef BATCH_TASK_H
 #define BATCH_TASK_H
 
+#include <assert.h>
 #include "batch_file.h"
 #include "list.h"
 #include "sha1.h"
 #include "jx.h"
 #include "rmsummary.h"
 
+struct batch_command {
+
+	struct list *pre;  /* List of commands prior to command */
+
+	char *command;     /* The command line to execute. */
+
+	struct list *post; /* List of commands to clean after command */
+};
+
+
 struct batch_task {
-	int taskid;                  /* Indicates the id provided by the creating system. I.E. Makeflow */
-	int jobid;                   /* Indicates the id assigned to the job by the submission system. */
+	int taskid;                   /* Indicates the id provided by the creating system. I.E. Makeflow */
+	int jobid;                    /* Indicates the id assigned to the job by the submission system. */
 
-	struct batch_queue *queue;   /* The queue this task is assigned to. */
+	struct batch_queue *queue;    /* The queue this task is assigned to. */
 
-	char *command;               /* The command line to execute. */
+	struct batch_command *command;/* The command line to execute. */
 
-	struct list   *input_files;  /* Task's required inputs, type batch_file */
-	struct list   *output_files; /* Task's expected outputs, type batch_file */
+	struct list   *input_files;   /* Task's required inputs, type batch_file */
+	struct list   *output_files;  /* Task's expected outputs, type batch_file */
 
-	struct rmsummary *resources; /* Resources assigned to task */
+	struct rmsummary *resources;  /* Resources assigned to task */
 
-	struct jx *envlist;          /* JSON formatted environment list */ 
+	struct jx *envlist;           /* JSON formatted environment list */ 
 
-	struct batch_job_info *info; /* Stores the info struct created by batch_job. */
+	struct batch_job_info *info;  /* Stores the info struct created by batch_job. */
 
-	char *hash;                  /* Checksum based on CMD, input contents, and output names. */
+	char *hash;                   /* Checksum based on CMD, input contents, and output names. */
 };
 
 /** Create a batch_task struct.
@@ -54,7 +65,7 @@ void batch_task_delete(struct batch_task *t);
 @param inner_name The name of the file at execution site.
 @return A pointer to the newly allocated batch_file struct.
 */
-struct batch_file * batch_task_add_input_file(struct batch_task *task, const char * outer_name, const char * inner_name);
+struct batch_file * batch_task_add_input_file(struct batch_task *task, const char * outer_name, const char * inner_name, const char *hash);
 
 /** Add file to output list of batch_task
  Creates a new batch_file from outer_name and inner_name.
@@ -65,7 +76,13 @@ struct batch_file * batch_task_add_input_file(struct batch_task *task, const cha
 @param inner_name The name of the file at execution site.
 @return A pointer to the newly allocated batch_file struct.
 */
-struct batch_file * batch_task_add_output_file(struct batch_task *task, const char * outer_name, const char * inner_name);
+struct batch_file * batch_task_add_output_file(struct batch_task *task, const char * outer_name, const char * inner_name, const char *hash);
+
+/** Add a command to the pre list.
+@param t The batch_task you are adding a pre command to.
+@param pre The command you want to add to the pre command list
+*/
+void batch_task_add_pre(struct batch_task *t, const char *pre);
 
 /** Set the command of the batch_task.
  Frees previous command and xxstrdups new command.
@@ -73,6 +90,13 @@ struct batch_file * batch_task_add_output_file(struct batch_task *task, const ch
 @param command The new command to use.
 */
 void batch_task_set_command(struct batch_task *t, const char *command);
+
+/** Add a command to the post list.
+@param t The batch_task you are adding a post command to.
+@param post The command you want to add to the post command list
+*/
+void batch_task_add_post(struct batch_task *t, const char *post);
+
 
 /** Set the batch task's command to the given JX command spec.
  * The JX command spec is first expanded, and replaces the
@@ -132,6 +156,10 @@ char * batch_task_generate_id(struct batch_task *t);
 @return The jx object created from t.
 */
 struct jx * batch_task_to_jx(struct batch_task *t);
+
+struct jx * batch_command_to_jx (struct batch_command *c);
+
+void batch_task_apply_wrapper (struct batch_task *t, struct jx *w);
 
 #endif
 /* vim: set noexpandtab tabstop=4: */

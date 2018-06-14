@@ -239,7 +239,9 @@ static int node_submit(void * instance_struct, struct dag_node *n, struct batch_
 	batch_task_wrap_command(task, cmd);
 	free(cmd);
 
-	batch_wrapper_cmd(wrapper, task->command);
+	batch_wrapper_cmd(wrapper, task->command->command);
+
+	batch_wrapper_id(wrapper, string_format("%d", task->taskid));
 
 	cmd = batch_wrapper_write(wrapper, task);
 	if (cmd) {

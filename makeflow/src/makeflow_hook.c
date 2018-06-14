@@ -55,7 +55,7 @@ struct dag_file *makeflow_hook_add_input_file(struct dag *d, struct batch_task *
 	/* Indicate this is an temporary file that should be cleaned up. */
 	f->type = file_type;
 
-	batch_task_add_input_file(task, name_on_submission, name_on_execution);
+	batch_task_add_input_file(task, name_on_submission, name_on_execution, f->hash);
 
 	return f;
 }
@@ -66,7 +66,7 @@ struct dag_file * makeflow_hook_add_output_file(struct dag *d, struct batch_task
 	struct dag_file *f = dag_file_lookup_or_create(d, name_on_submission);
 	f->type = file_type;
 
-	batch_task_add_output_file(task, name_on_submission, name_on_execution);
+	batch_task_add_output_file(task, name_on_submission, name_on_execution, f->hash);
 
 	return f;
 }

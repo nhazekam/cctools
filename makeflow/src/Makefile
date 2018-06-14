@@ -22,6 +22,7 @@ MAKEFLOW_MODULES = \
  makeflow_module_singularity.o\
  makeflow_module_storage_allocation.o\
  makeflow_module_vc3_builder.o\
+ makeflow_module_wrapper.o\
 
 ifeq ($(CCTOOLS_CURL_AVAILABLE),yes)
 CCTOOLS_EXTERNAL_LINKAGE += $(CCTOOLS_CURL_LDFLAGS) -lssl -lcrypto

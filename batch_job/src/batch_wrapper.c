@@ -23,6 +23,7 @@ struct batch_wrapper {
 	struct list *argv;
 	char *cmd;
 	char *prefix;
+	char *id;
 };
 
 struct batch_wrapper *batch_wrapper_create(void) {
@@ -39,6 +40,7 @@ void batch_wrapper_delete(struct batch_wrapper *w) {
 	list_delete(w->argv);
 	free(w->cmd);
 	free(w->prefix);
+	free(w->id);
 	free(w);
 }
 
@@ -110,39 +112,51 @@ void batch_wrapper_prefix(struct batch_wrapper *w, const char *prefix) {
 	w->prefix = xxstrdup(prefix);
 }
 
+void batch_wrapper_id(struct batch_wrapper *w, const char *id) {
+	assert(w);
+	assert(id);
+	assert(!w->id);
+	w->id = string_format("%.8s", id);
+}
+
 char *batch_wrapper_write(struct batch_wrapper *w, struct batch_task *task) {
 	assert(w);
 	assert(task);
 
-	char *name = string_format("%s_XXXXXX", w->prefix ? w->prefix : "./wrapper");
-	int wrapper_fd = mkstemp(name);
-	if (wrapper_fd == -1) {
-		int saved_errno = errno;
-		debug(D_NOTICE|D_BATCH, "failed to create wrapper: %s", strerror(errno));
-		free(name);
-		errno = saved_errno;
-		return NULL;
-	}
+	FILE *wrapper;
+	char *name = string_format("%s_%s.sh", w->prefix ? w->prefix : "./wrapper", w->id ? w->id : "XXXXXX");
+	if(!w->id){
+		int wrapper_fd = mkstemp(name);
+		if (wrapper_fd == -1) {
+			int saved_errno = errno;
+			debug(D_NOTICE|D_BATCH, "failed to create wrapper: %s", strerror(errno));
+			free(name);
+			errno = saved_errno;
+			return NULL;
+		}
 
-	batch_task_add_input_file(task, name, NULL);
-
-	if (fchmod(wrapper_fd, 0700) == -1) {
-		int saved_errno = errno;
-		debug(D_NOTICE|D_BATCH, "failed to make wrapper executable: %s", strerror(errno));
-		free(name);
-		close(wrapper_fd);
-		errno = saved_errno;
-		return NULL;
-	}
-
-	FILE *wrapper = fdopen(wrapper_fd, "w");
-	if (!wrapper) {
-		int saved_errno = errno;
-		debug(D_NOTICE|D_BATCH, "failed to open wrapper: %s", strerror(errno));
-		free(name);
-		close(wrapper_fd);
-		errno = saved_errno;
-		return NULL;
+		batch_task_add_input_file(task, name, NULL, NULL);
+	
+		if (fchmod(wrapper_fd, 0700) == -1) {
+			int saved_errno = errno;
+			debug(D_NOTICE|D_BATCH, "failed to make wrapper executable: %s", strerror(errno));
+			free(name);
+			close(wrapper_fd);
+			errno = saved_errno;
+			return NULL;
+		}
+	
+		wrapper = fdopen(wrapper_fd, "w");
+		if (!wrapper) {
+			int saved_errno = errno;
+			debug(D_NOTICE|D_BATCH, "failed to open wrapper: %s", strerror(errno));
+			free(name);
+			close(wrapper_fd);
+			errno = saved_errno;
+			return NULL;
+		}
+	} else {
+		wrapper = fopen(name, "w");
 	}
 
 	fprintf(wrapper, "#!/bin/sh\n");
@@ -152,10 +166,12 @@ char *batch_wrapper_write(struct batch_wrapper *w, struct batch_task *task) {
 		char fresh[16];
 		random_hex(fresh, sizeof(fresh));
 		fprintf(wrapper, "CLEANUP_%s () {\n", fresh);
+		fprintf(wrapper, "EXIT=$?\n");
 		list_first_item(w->post);
 		for (const char *c; (c = list_next_item(w->post));) {
 			fprintf(wrapper, "eval %s\n", c);
 		}
+		fprintf(wrapper, "exit $EXIT\n");
 		fprintf(wrapper, "}\n");
 		fprintf(wrapper, "trap CLEANUP_%s EXIT INT TERM\n", fresh);
 	}
@@ -180,6 +196,8 @@ char *batch_wrapper_write(struct batch_wrapper *w, struct batch_task *task) {
 	}
 
 	fclose(wrapper);
+
+	chmod(name, 0700);
 	return name;
 }
 
@@ -226,7 +244,6 @@ char *batch_wrapper_expand(struct batch_task *t, struct jx *spec) {
 	assert(t);
 	assert(spec);
 
-	struct jx *task = batch_task_to_jx(t);
 	struct jx *j;
 	unsigned commands = 0;
 	char *result = NULL;
@@ -235,15 +252,6 @@ char *batch_wrapper_expand(struct batch_task *t, struct jx *spec) {
 	if (!jx_istype(spec, JX_OBJECT)) {
 		debug(D_NOTICE|D_BATCH, "wrapper command spec must be a JX object");
 		goto FAIL;
-	}
-
-	struct jx *inputs = jx_lookup(spec, "inputs");
-	if(inputs) {
-		if (!jx_istype(inputs, JX_ARRAY)) {
-			debug(D_NOTICE|D_BATCH, "inputs must be specified in an array");
-			goto FAIL
-		}
-		batch_wrapper_parse_inputs();
 	}
 
 	struct jx *prefix = jx_lookup(spec, "prefix");

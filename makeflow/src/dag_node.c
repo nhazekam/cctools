@@ -413,12 +413,12 @@ struct batch_task *dag_node_to_batch_task(struct dag_node *n, struct batch_queue
 	struct dag_file *f;
 	list_first_item(n->source_files);
 	while((f = list_next_item(n->source_files))){
-		batch_task_add_input_file(task, f->filename, dag_node_get_remote_name(n, f->filename));
+		batch_task_add_input_file(task, f->filename, dag_node_get_remote_name(n, f->filename), f->hash);
 	}
 
 	list_first_item(n->target_files);
 	while((f = list_next_item(n->target_files))){
-		batch_task_add_output_file(task, f->filename, dag_node_get_remote_name(n, f->filename));
+		batch_task_add_output_file(task, f->filename, dag_node_get_remote_name(n, f->filename), f->hash);
 	}
 
 	batch_task_set_resources(task, dag_node_dynamic_label(n));
