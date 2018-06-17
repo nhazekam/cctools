@@ -33,6 +33,7 @@ struct batch_task {
 	struct batch_command *command;/* The command line to execute. */
 
 	struct list   *input_files;   /* Task's required inputs, type batch_file */
+	struct list   *temp_files;   /* Task's required inputs, type batch_file */
 	struct list   *output_files;  /* Task's expected outputs, type batch_file */
 
 	struct rmsummary *resources;  /* Resources assigned to task */

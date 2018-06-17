@@ -49,6 +49,7 @@ struct batch_task *batch_task_create (struct batch_queue *queue)
 	t->command = batch_command_create ();
 
 	t->input_files = list_create ();
+	t->temp_files = list_create ();
 	t->output_files = list_create ();
 
 	t->info = batch_job_info_create ();
@@ -70,6 +71,12 @@ void batch_task_delete (struct batch_task *t)
 	    batch_file_delete (f);
 	}
 	list_delete (t->input_files);
+
+	list_first_item (t->temp_files);
+	while ((f = list_next_item (t->temp_files))){
+	    batch_file_delete (f);
+	}
+	list_delete (t->temp_files);
 
 	list_first_item (t->output_files);
 	while ((f = list_next_item (t->output_files)))
@@ -162,6 +169,19 @@ struct batch_file *batch_task_add_input_file (struct batch_task *task, const cha
 
 	if(!f)
 		debug(D_BATCH, "Input %s->%s already specified in %d", outer_name, inner_name, task->taskid);
+
+	return f;
+}
+
+/** Creates new batch_file and adds to outputs. */
+struct batch_file *batch_task_add_temp_file (struct batch_task *task, const char *outer_name, const char *inner_name, const char *hash)
+{
+	struct batch_file *f = batch_file_create (task->queue, outer_name, inner_name, hash);
+
+	f = batch_task_check_file(task->temp_files, f);
+
+	if(!f)
+		debug(D_BATCH, "Temp %s->%s already specified in %d", outer_name, inner_name, task->taskid);
 
 	return f;
 }
@@ -349,6 +369,14 @@ struct jx *batch_task_to_jx (struct batch_task *t)
 	list_cursor_destroy (cur);
 	jx_insert (tj, jx_string ("outputs"), outputs);
 
+	struct jx *temps = jx_array (NULL);
+	cur = list_cursor_create (t->temp_files);
+	for (list_seek (cur, 0); list_get (cur, (void **) &f); list_next (cur)){
+	    jx_array_insert (temps, batch_file_to_jx (f));
+	}
+	list_cursor_destroy (cur);
+	jx_insert (tj, jx_string ("temps"), temps);
+
 	struct jx *inputs = jx_array (NULL);
 	cur = list_cursor_create (t->input_files);
 	for (list_seek (cur, 0); list_get (cur, (void **) &f); list_next (cur)){
@@ -358,8 +386,9 @@ struct jx *batch_task_to_jx (struct batch_task *t)
 	jx_insert (tj, jx_string ("inputs"), inputs);
 
 	jx_insert (tj, jx_string ("command"), batch_command_to_jx (t->command));
+	jx_insert (tj, jx_string ("cmd"), jx_string(t->command->command));
 	jx_insert (tj, jx_string ("hash_id"), jx_string (batch_task_generate_id (t)));
-	jx_insert (tj, jx_string ("id"), jx_string (string_format("%.8s", batch_task_generate_id (t))));
+	jx_insert (tj, jx_string ("id"), jx_string (string_format("%s", batch_task_generate_id (t))));
 	return tj;
 }
 
@@ -404,6 +433,41 @@ void batch_task_from_jx (struct batch_task *t, struct jx *j)
 					hash_value = xxstrdup (hash->u.string_value);
 				}
 				batch_task_add_input_file (t, outer_name, inner_name, hash_value);
+			} else {
+				debug (D_ERROR | D_MAKEFLOW_HOOK, "Non-compliant type passed as file");
+				jx_pretty_print_stream(tmp, stdout);
+				return;
+			}
+		}
+	}
+
+	struct jx *temps = jx_lookup (j, "temps");
+	if (temps){
+	    if (!jx_istype (temps, JX_ARRAY)){
+			debug (D_NOTICE | D_BATCH, "temps must be an array");
+			return;
+		}
+
+	    for (void *i = NULL; (tmp = jx_iterate_array (temps, &i));){
+			if (jx_istype(tmp, JX_STRING)){
+				batch_task_add_temp_file(t, xxstrdup(tmp->u.string_value), xxstrdup (tmp->u.string_value), NULL);
+		    } else if (jx_istype (tmp, JX_OBJECT)) {
+				char *outer_name = NULL;
+				char *inner_name = NULL;
+				char *hash_value = NULL;
+				struct jx *outer = jx_lookup(tmp, "outer_name");
+				if (outer && jx_istype(outer, JX_STRING)) {
+					outer_name = xxstrdup (outer->u.string_value);
+				}
+				struct jx *inner = jx_lookup (tmp, "inner_name");
+				if (inner && jx_istype(inner, JX_STRING)){
+					inner_name = xxstrdup (inner->u.string_value);
+				}
+				struct jx *hash = jx_lookup (tmp, "hash");
+				if (hash && jx_istype(hash, JX_STRING)){
+					hash_value = xxstrdup (hash->u.string_value);
+				}
+				batch_task_add_temp_file (t, outer_name, inner_name, hash_value);
 			} else {
 				debug (D_ERROR | D_MAKEFLOW_HOOK, "Non-compliant type passed as file");
 				jx_pretty_print_stream(tmp, stdout);
@@ -514,7 +578,11 @@ char * batch_task_to_wrapper (struct batch_task *t)
 	list_cursor_destroy(cur);
 
 	char *wrap_name = batch_wrapper_write(wrapper, t);
+	if(!wrap_name){
+		return NULL;
+	}
 	batch_task_add_input_file(t, wrap_name, wrap_name, NULL);
+	batch_task_add_temp_file(t, wrap_name, wrap_name, NULL);
 	batch_command_delete(t->command);
 	t->command = batch_command_create();
 	cmd = string_format("./%s", wrap_name);
@@ -531,8 +599,10 @@ char * batch_task_to_sandbox (struct batch_task *t)
 	struct batch_wrapper *wrapper = batch_wrapper_create ();
 	batch_wrapper_prefix (wrapper, "t");
 	batch_wrapper_id(wrapper, batch_task_generate_id(t));
-	char *wrap_name = string_format ("%s_%.8s", "t", batch_task_generate_id(t));
+	char *wrap_name = string_format ("%s_"ID_LENGTH, "t", batch_task_generate_id(t));
 	char *cmd = NULL;
+
+	//batch_wrapper_pre (wrapper, "export T_CWD=$(pwd)");
 
 	struct batch_file *f;
 	cur = list_cursor_create (t->input_files);
@@ -570,7 +640,6 @@ char * batch_task_to_sandbox (struct batch_task *t)
 	}
 	list_cursor_destroy(cur);
 
-
 	/* Once the command is finished go back to working dir. */
 	batch_wrapper_post (wrapper, "cd ..");
 
@@ -583,12 +652,17 @@ char * batch_task_to_sandbox (struct batch_task *t)
 
 	    /* Copy out results to expected location. OR TRUE so that lack of one file does not
 	       prevent other files from being sent back. */
-	    cmd = string_format ("mkdir -p $(dirname %s) && cp -r %s/%s %s || true",
+	    //cmd = string_format ("mkdir -p $(dirname ${T_CWD}/%s) && mv %s  ${T_CWD}/%s || true",
+	    cmd = string_format ("mkdir -p $(dirname %s) && mv %s/%s  %s || true",
 		       f->outer_name, wrap_name, f->inner_name, f->outer_name);
 		batch_wrapper_post (wrapper, cmd);
 		free(cmd);
 	}
 	list_cursor_destroy(cur);
+
+
+	/* Once the command is finished go back to working dir. */
+	//batch_wrapper_post (wrapper, "cd ${T_CWD}");
 
 	/* Enter into sandbox_dir. */
 	cmd = string_format ("if [ $EXIT ] ; then rm -rf %s; fi", wrap_name);
@@ -598,6 +672,7 @@ char * batch_task_to_sandbox (struct batch_task *t)
 	free (wrap_name);
 	wrap_name = batch_wrapper_write(wrapper, t);
 	batch_task_add_input_file(t, wrap_name, wrap_name, NULL);
+	batch_task_add_temp_file(t, wrap_name, wrap_name, NULL);
 	batch_command_delete(t->command);
 	t->command = batch_command_create();
 	cmd = string_format("./%s", wrap_name);

@@ -110,11 +110,12 @@ static int makeflow_module_wrapper_node_submit( void * instance_struct, struct d
 	}
 	list_cursor_destroy(cur);
 
-	// Skip first 2 characters which are "./"
-	char *base_script = string_format("%s", task->command->command+2);
-	df = dag_file_lookup_or_create(node->d, base_script);
-	df->type = DAG_FILE_TYPE_TEMP;
-	free(base_script);
+	cur = list_cursor_create(task->temp_files);
+	for (list_seek (cur, -1); list_get (cur, (void **) &bf); list_prev (cur)){
+		df = dag_file_lookup_or_create(node->d, bf->outer_name);
+		df->type = DAG_FILE_TYPE_TEMP;
+	}
+	list_cursor_destroy(cur);
 
 	return MAKEFLOW_HOOK_SUCCESS;
 }

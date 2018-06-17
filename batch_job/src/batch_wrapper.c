@@ -11,11 +11,14 @@ See the file COPYING for details.
 #include <stdio.h>
 
 #include "batch_wrapper.h"
+#include "get_line.h"
 #include "list.h"
 #include "debug.h"
 #include "stringtools.h"
 #include "xxmalloc.h"
 #include "random.h"
+
+#define MAX_BUFFER_SIZE 4096
 
 struct batch_wrapper {
 	struct list *pre;
@@ -116,7 +119,7 @@ void batch_wrapper_id(struct batch_wrapper *w, const char *id) {
 	assert(w);
 	assert(id);
 	assert(!w->id);
-	w->id = string_format("%.8s", id);
+	w->id = string_format("%s", id);
 }
 
 char *batch_wrapper_write(struct batch_wrapper *w, struct batch_task *task) {
@@ -124,7 +127,7 @@ char *batch_wrapper_write(struct batch_wrapper *w, struct batch_task *task) {
 	assert(task);
 
 	FILE *wrapper;
-	char *name = string_format("%s_%s.sh", w->prefix ? w->prefix : "./wrapper", w->id ? w->id : "XXXXXX");
+	char *name = string_format("%s_"ID_LENGTH".sh", w->prefix ? w->prefix : "./wrapper", w->id ? w->id : "XXXXXX");
 	if(!w->id){
 		int wrapper_fd = mkstemp(name);
 		if (wrapper_fd == -1) {
@@ -156,10 +159,36 @@ char *batch_wrapper_write(struct batch_wrapper *w, struct batch_task *task) {
 			return NULL;
 		}
 	} else {
+		struct stat buf;
+		char full_id[MAX_BUFFER_SIZE];
+		//Check is the wrapper exists
+		if(stat(name, &buf)==0){
+
+			wrapper = fopen(name, "r");
+			// Skip shebang
+			char *line = get_line(wrapper);
+			// Get id line, unlikely this will exist in other files with same name
+			line = get_line(wrapper);
+			fclose(wrapper);
+			if(sscanf(line, "#ID %s", full_id) == 1) {
+				if(strcmp(w->id, full_id)){
+					debug(D_NOTICE|D_BATCH, "wrapper exists with different id: %s: %s", full_id, w->id);
+					return NULL;
+				}
+			} else {
+				debug(D_NOTICE|D_BATCH, "file exists with wrapper name: %s", name);
+				return NULL;
+			}
+			
+			return name;
+		}
+
+		//Open wrapper for writing
 		wrapper = fopen(name, "w");
 	}
 
 	fprintf(wrapper, "#!/bin/sh\n");
+	fprintf(wrapper, "#ID %s\n", w->id);
 	fprintf(wrapper, "set -e\n");
 
 	if (w->post) {

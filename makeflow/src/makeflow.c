@@ -810,17 +810,19 @@ static void makeflow_node_complete(struct dag *d, struct dag_node *n, struct bat
 			makeflow_failed_flag = 1;
 		}
 
+		/* Clear TEMP files */
+		list_first_item(task->input_files);
+		while((bf = list_next_item(task->input_files))) {
+			f = dag_file_lookup_or_create(d, bf->inner_name);
+			if(f->type == DAG_FILE_TYPE_TEMP){
+				makeflow_clean_file(d, makeflow_get_queue(n), f);
+			}
+		}
+
+
 		makeflow_log_state_change(d, n, DAG_NODE_STATE_COMPLETE);
 	}
 
-	/* Clear TEMP files */
-	list_first_item(task->input_files);
-	while((bf = list_next_item(task->input_files))) {
-		f = dag_file_lookup_or_create(d, bf->inner_name);
-		if(f->type == DAG_FILE_TYPE_TEMP){
-			makeflow_clean_file(d, makeflow_get_queue(n), f);
-		}
-	}
 }
 
 /*

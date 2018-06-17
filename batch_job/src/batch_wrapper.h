@@ -9,6 +9,8 @@ See the file COPYING for details.
 
 #include "batch_task.h"
 
+#define ID_LENGTH "%.8s"
+
 /** Create a builder for a batch wrapper.
  * Use batch_wrapper_pre, batch_wrapper_cmd, etc. to add
  * commands to the wrapper. These exist only in memory until
